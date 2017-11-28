@@ -15,32 +15,30 @@ from logwiz.logutil import get_last_log
 def get_log_to_process(conf):
 
     info("Searching for most recent log file")    
-    logfile, log_date = get_last_log(
+    last_log, log_date = get_last_log(
         conf["LOG_DIR"],
         conf["LOG_GLOB_TEMPLATE"],
-        conf["LOG_DATE_TEMPLATE"],
-        ignore_errors=True
+        conf["LOG_DATE_TEMPLATE"]
         )
-    info("Found file %s" % logfile)
+    info("Found file %s for date %s" % (last_log, log_date))
 
-    if not logfile:
+    if not last_log:
         info("No valid logs found, abort")
-        sys.exit(0)
+        return None, None
 
     info("Searching for most recent report file")     
     last_report, report_date = get_last_log(
             conf["REPORT_DIR"],
             conf["REPORT_GLOB_TEMPLATE"],
-            conf["REPORT_DATE_TEMPLATE"],
-            ignore_errors=True
+            conf["REPORT_DATE_TEMPLATE"]
     )
-    info("Found report file %s" % last_processed_log)
+    info("Found report file %s for date %s" % (last_report, report_date))
 
-    if last_report and report_date >= logfile_date:
-        info("Last processed log %s is uptodate (cmp with %s)" % (last_processed_log, logfile))
-        sys.exit(0)
+    if last_report and report_date >= log_date:
+        info("Last processed log %s is uptodate (cmp with %s)" % (last_report, last_log))
+        return None, None
 
-    return logfile, log_date
+    return last_log, log_date
 
 
 def main():
@@ -51,9 +49,13 @@ def main():
     try:
         logfile, date = get_log_to_process(conf)
     except:
-        exception("Unable to get log to process")
+        exception("Unable to find logs to process")
         sys.exit(0) 
-    
+   
+    if not logfile:
+        info("No logs found")
+        sys.exit(0)
+
 
     info("Processing logfile %s with date %s" % (logfile, date))
     try:
@@ -64,6 +66,7 @@ def main():
 
     info("Rendering report") 
     try:
+        outfile = os.path.join(conf["REPORT_DIR"], ) 
         report = render_report(parsed_data, outfile)
     except:
         exception("Error rendering report")

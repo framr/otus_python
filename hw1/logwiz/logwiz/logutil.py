@@ -1,36 +1,47 @@
-import re
+#import re
 import glob
 import os
-import sys
-
+#import sys
+from datetime import datetime
 
 from logwiz.logger import info, error, exception
 
 
-def logs_gen(path, glob_template, datetime_template, ignore_errors=False):
+def extract_date(s, date_template):
+    
+    date = None
+    if isinstance(date_template, list):
+        for templ in date_template:
+            try:
+                date = datetime.strptime(s, templ)
+            except:
+                continue
+            break
+    else:
+        date = datetime.strptime(s, date_template)
+
+    return date
+
+
+def logs_gen(path, glob_template, datetime_template):
     log_files = glob.glob(os.path.join(path, glob_template))
-    expr = re.compile(datetime_template)
     for filename in log_files:
-        match = expr.match(filename)
-        if not match:
-            error("Malformed filename %s, date does not match" % filename)
-            if not ignore_errors:
-                sys.exit(0)
-        
-        log_date = match.group("DATE")
+        log_date = extract_date(os.path.basename(filename), datetime_template)
+        if not log_date:
+            exception("Malformed log name %s, date can not be extracted" % filename)
+
         yield filename, log_date
 
 
-def get_last_log(path, glob_template, datetime_template, ignore_errors=False):
+def get_last_log(path, glob_template, datetime_template):
 
-    log_stream = logs_gen(path, glob_template, datetime_template, ignore_errors=ignore_errors)
-
+    log_stream = logs_gen(path, glob_template, datetime_template)
     last_log = None
     max_date = None
     for log, date in log_stream:
-        if not max_date or max_date > log_date:
-            last_log = filename
-            max_date = log_date
+        if not max_date or max_date > date:
+            last_log = log
+            max_date = date
  
     return last_log, max_date
 

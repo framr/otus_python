@@ -13,9 +13,10 @@ DEFAULT_CONFIG = {
     "LOG_DIR": "./log",
     "LOGGER_DIR": "./logger",
     "LOG_GLOB_TEMPLATE": "nginx-access-ui.log-*",
-    "LOG_DATE_TEMPLATE": ".*(?P<DATE>\d{8}).*",
+    #"LOG_DATE_TEMPLATE": "(?P<DATE>\d{8})",
+    "LOG_DATE_TEMPLATE": ["nginx-access-ui.log-%Y%m%d", "nginx-access-ui.log-%Y%m%d.gz"],
     "REPORT_GLOB_TEMPLATE": "report-*.html",
-    "REPORT_DATE_TEMPLATE": ".*(?P<DATE>\d{4}\.\d{2}\.d{2}).*"
+    "REPORT_DATE_TEMPLATE": "report-%Y.%m.%d.html"
 }
 
 
