@@ -6,9 +6,8 @@
 #                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
 #                     '$request_time';
 
-
 from logwiz.logger import info, error, exception
-
+import re
 
 class RecordParser(object):
     """
@@ -17,7 +16,7 @@ class RecordParser(object):
     def __init__(self):
         pass
     def __call__(self, rec):
-        pass
+        raise NotImplementedError
 
 class StatAggregator(object):
     """
@@ -29,6 +28,24 @@ class StatAggregator(object):
         raise NotImplementedError
     def get_result(self):
         return self._result
+
+
+class OTUSRecordParser(RecordParser):
+    def __init__(self):
+
+        self._re_parts = [
+            r'(?P<remote_addr>\S+)',
+            r'(?P<remote_user>\S+)',
+            r'(?P<http_x_real_ip>\S+)',
+            r'\[(?P<time_local>.+)\]',
+            r'"(?P<request>.+)"',
+            r'(?P<TIME>\d+)',
+
+        ]
+        self._regexp = re.compile()
+
+    def __call__(self, recs):
+        pass
 
 class OTUSStatAggregator(StatAggregator):
     def __init__(self):
