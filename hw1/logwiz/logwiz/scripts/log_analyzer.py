@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-# Here be dragons
-
 import sys
 
 from logwiz.logger import init_logger, info, error, exception
 from logwiz.conf import read_config
 from logwiz.report import render_report
-from logwiz.parser import parse_log
+from logwiz.parser import parse_otus_log
 from logwiz.logutil import get_last_log
 
 
@@ -59,7 +56,7 @@ def main():
 
     info("Processing logfile %s with date %s" % (logfile, date))
     try:
-        parsed_data = parse_log(logfile)
+        parsed_data = parse_otus_log(logfile)
     except:
         exception("Error parsing log")
         sys.exit(0)    
