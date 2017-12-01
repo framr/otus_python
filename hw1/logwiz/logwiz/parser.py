@@ -6,6 +6,7 @@
 #                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
 #                     '$request_time';
 import re
+import gzip
 from collections import defaultdict
 
 from logwiz.logger import info, error, exception
@@ -62,7 +63,7 @@ class OTUSRecordParser(RecordParser):
 
 
 class OTUSStatAggregator(StatAggregator):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super(OTUSStatAggregator, self).__init__(*args, **kwargs)
         self._result = defaultdict(list)
 
@@ -101,24 +102,61 @@ def _gen_parsed(gen_lines, rec_parser):
 def do_aggregate(filename, rec_parser, aggregator):
     """
     apply custom aggregator class iteratively to log
-    """ 
+    """
     log = _gen_open(filename)
     log_lines = _gen_lines_from_streams(log)
     parsed_records = _gen_parsed(log_lines)
     for rec in parsed_records:
-        aggregator(rec) 
+        aggregator(rec)
 
 
-def calc_time_stats(data):
-    pass
+def calc_stats(data):
+    """
+    data: array of floats
+    output: basic statistics - sum, avg, median, max, count
+    """
+    if not data:
+        return {}
+
+    _count = len(data)
+    _sum = sum(data)
+    _avg = _sum / _count
+    _sorted = sorted(data)
+    _med = _sorted[_count / 2]
+    _max = _sorted[-1]
+    return {
+            "count": _count,
+            "sum": _sum,
+            "avg": _avg,
+            "med": _med,
+            "max": _max
+            }
+
+
+def calc_url_stats(url_data, top=None):
+
+    url_stats = {}
+    total_time = 0
+    total_count = 0
+    for url, data in url_data.iteritems():
+        url_stats[url] = calc_stats(data)
+        total_time += url_stats[url]["sum"]
+        total_count += url_stats[url]["count"]
+
+    result = {}
+    for url in sorted(url_stats, key=lambda url: url_stats[url]['avg'], reverse=True)[:top]:
+        result[url] = url_stats[url]
+        result[url]["count_perc"] = 100 * float(url_stats["url"]["count"]) / total_count
+        result[url]["time_perc"] = 100 * float(url_stats["url"]["sum"]) / total_time
+
+    return result
 
 
 def parse_otus_log(filename):
     parser = RecordParser()
     aggregator = OTUSStatAggregator()
-    do_aggregate(filename, parser, aggregator) 
+    do_aggregate(filename, parser, aggregator)
     url_data = aggregator.get_value()
-    for url, data in url_data.iteritems():
-        time_stats = calc_time_stats(data)
-        
+    time_stats = calc_url_stats(url_data)
+    return time_stats
 
