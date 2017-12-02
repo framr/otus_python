@@ -5,5 +5,6 @@ setup(name='logwiz',
       author='fram',
       author_email='pavel.sht(gav-gav-gav)yandex.ru',
       packages=find_packages(),
-      scripts=['logwiz/scripts/log_analyzer.py']
+      scripts=['logwiz/scripts/log_analyzer.py'],
+      test_suite='tests'
       )

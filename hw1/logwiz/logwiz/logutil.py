@@ -5,14 +5,15 @@ import glob
 import os
 from datetime import datetime
 
-from logwiz.logger import info, error, exception
+from logwiz.logger import error
 
 
 def extract_date(s, date_template):
     """
     Extract date from log name.
-    date template: template recognized by datetime.strptime function. can be either string with template
-    or a list of templates (date is taken from first successful match).
+    date template: template recognized by datetime.strptime function.
+    can be either string with template or a list of templates
+    (date is taken from first successful match).
     output: datetime object
     """
 
@@ -21,7 +22,7 @@ def extract_date(s, date_template):
         for templ in date_template:
             try:
                 date = datetime.strptime(s, templ)
-            except:
+            except Exception:
                 continue
             break
     else:
@@ -40,7 +41,7 @@ def get_logs_by_regexp(path, glob_template, datetime_template):
     for filename in log_files:
         log_date = extract_date(os.path.basename(filename), datetime_template)
         if not log_date:
-            exception("Malformed log name %s, date can not be extracted" % filename)
+            error("Malformed log name %s, date can not be extracted" % filename)
 
         yield filename, log_date
 
@@ -49,7 +50,7 @@ def get_last_log(path, glob_template, datetime_template):
     """
     Get last log in a path matching templates
     datetime_template: template used for extracting date from log name
-    output: tuples with log name and log date (datetime object) 
+    output: tuples with log name and log date (datetime object)
     """
 
     log_stream = get_logs_by_regexp(path, glob_template, datetime_template)
@@ -59,6 +60,5 @@ def get_last_log(path, glob_template, datetime_template):
         if not max_date or max_date > date:
             last_log = log
             max_date = date
- 
-    return last_log, max_date
 
+    return last_log, max_date

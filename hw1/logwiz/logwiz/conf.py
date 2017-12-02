@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from argparse import ArgumentParser
 import json
 import sys
@@ -23,7 +24,7 @@ DEFAULT_CONFIG = {
 def read_config():
     argparser = ArgumentParser()
     argparser.add_argument("--config", dest="conf", type=str, default=None,
-            help="config file")
+                           help="config file")
     args = argparser.parse_args()
 
     conf = DEFAULT_CONFIG

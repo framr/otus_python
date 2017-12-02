@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 XXX: this should be a part of separate package
 """
@@ -37,4 +38,3 @@ def init_logger(path=None, prepare_env=True):
             filename=logfile,
             level=DEFAULT_LOGGING_LEVEL
     )
-

@@ -9,8 +9,6 @@ import re
 import gzip
 from collections import defaultdict
 
-from logwiz.logger import info, error, exception
-
 
 class RecordParser(object):
     """
@@ -164,4 +162,3 @@ def parse_otus_log(filename, top=None):
     url_data = aggregator.get_value()
     url_stats = calc_url_stats(url_data, top=top)
     return url_stats
-

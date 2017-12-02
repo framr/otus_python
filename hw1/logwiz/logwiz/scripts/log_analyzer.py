@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
-import timestamp
+import time
 
 from logwiz.logger import init_logger, info, error, exception
 from logwiz.conf import read_config
@@ -42,11 +42,10 @@ def get_log_to_process(conf):
 
 def main():
 
-
     conf = read_config()
     init_logger(path=conf.get("LOGGER_DIR", None))
 
-    #XXX: We need a lock preventing from running two scripts simultaneously here
+    # XXX: We need a lock preventing from running two scripts simultaneously here
     try:
         logfile, date = get_log_to_process(conf)
     except Exception:
@@ -69,7 +68,7 @@ def main():
     try:
         outfile = os.path.join(conf["REPORT_DIR"], date.strftime(conf["REPORT_DATE_TEMPLATE"]))
         info("Report file: %s" % outfile)
-        report = render_report(parsed_data, outfile)
+        render_report(url_stats, outfile)
 
         with open(conf["TIMESTAMP_FILE"], "w") as ts_file:
             timestamp = time.time()
@@ -82,4 +81,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
