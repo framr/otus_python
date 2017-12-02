@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
+import timestamp
 
 from logwiz.logger import init_logger, info, error, exception
 from logwiz.conf import read_config
 from logwiz.report import render_report
-from logwiz.parser import parse_otus_log
+from logwiz.parser import parse_otus_log, calc_url_stats
 from logwiz.logutil import get_last_log
 
 
@@ -41,9 +42,11 @@ def get_log_to_process(conf):
 
 def main():
 
+
     conf = read_config()
     init_logger(path=conf.get("LOGGER_DIR", None))
 
+    #XXX: We need a lock preventing from running two scripts simultaneously here
     try:
         logfile, date = get_log_to_process(conf)
     except Exception:
@@ -56,15 +59,22 @@ def main():
 
     info("Processing logfile %s with date %s" % (logfile, date))
     try:
-        parsed_data = parse_otus_log(logfile)
+        url_data = parse_otus_log(logfile)
+        url_stats = calc_url_stats(url_data, top=conf["REPORT_SIZE"])
     except Exception:
-        exception("Error parsing log")
+        exception("Error parsing and processing log")
         sys.exit(0)
 
-    info("Rendering report")
+    info("Rendering report for date %s" % date)
     try:
-        outfile = os.path.join(conf["REPORT_DIR"], )
+        outfile = os.path.join(conf["REPORT_DIR"], date.strftime(conf["REPORT_DATE_TEMPLATE"]))
+        info("Report file: %s" % outfile)
         report = render_report(parsed_data, outfile)
+
+        with open(conf["TIMESTAMP_FILE"], "w") as ts_file:
+            timestamp = time.time()
+            ts_file.write(timestamp)
+            os.utime(conf["TIMESTAMP_FILE"], (timestamp, timestamp))
     except Exception:
         exception("Error rendering report")
         sys.exit(0)

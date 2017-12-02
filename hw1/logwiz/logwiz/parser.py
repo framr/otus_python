@@ -134,7 +134,6 @@ def calc_stats(data):
 
 
 def calc_url_stats(url_data, top=None):
-
     url_stats = {}
     total_time = 0
     total_count = 0
@@ -143,20 +142,26 @@ def calc_url_stats(url_data, top=None):
         total_time += url_stats[url]["sum"]
         total_count += url_stats[url]["count"]
 
-    result = {}
+    result = []
     for url in sorted(url_stats, key=lambda url: url_stats[url]['avg'], reverse=True)[:top]:
-        result[url] = url_stats[url]
-        result[url]["count_perc"] = 100 * float(url_stats["url"]["count"]) / total_count
-        result[url]["time_perc"] = 100 * float(url_stats["url"]["sum"]) / total_time
-
+        result.append({
+            "url": url,
+            "count": url_stats[url]["count"],
+            "time_avg": url_stats[url]["avg"],
+            "time_sum": url_stats[url]["sum"],
+            "time_max": url_stats[url]["max"],
+            "time_med": url_stats[url]["med"],
+            "count_perc": 100 * float(url_stats["url"]["count"]) / total_count,
+            "time_perc": 100 * float(url_stats["url"]["sum"]) / total_time
+            })
     return result
 
 
-def parse_otus_log(filename):
+def parse_otus_log(filename, top=None):
     parser = RecordParser()
     aggregator = OTUSStatAggregator()
     do_aggregate(filename, parser, aggregator)
     url_data = aggregator.get_value()
-    time_stats = calc_url_stats(url_data)
-    return time_stats
+    url_stats = calc_url_stats(url_data, top=top)
+    return url_stats
 
