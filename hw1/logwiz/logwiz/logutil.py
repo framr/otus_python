@@ -15,6 +15,7 @@ def extract_date(s, date_template):
     can be either string with template or a list of templates
     (date is taken from first successful match).
     output: datetime object
+        in case of no match returns None
     """
 
     date = None
@@ -22,15 +23,18 @@ def extract_date(s, date_template):
         for templ in date_template:
             try:
                 date = datetime.strptime(s, templ)
-            except Exception:
+            except ValueError:
                 continue
             break
     else:
-        date = datetime.strptime(s, date_template)
+        try:
+            date = datetime.strptime(s, date_template)
+        except ValueError:
+            pass
     return date
 
 
-def get_logs_by_regexp(path, glob_template, datetime_template):
+def get_logs_by_regexp_time(path, glob_template, datetime_template):
     """
     Generator yielding logs matching specific template in a path.
     glob_template: logs are filtered based on unix glob in this template.
@@ -53,11 +57,11 @@ def get_last_log(path, glob_template, datetime_template):
     output: tuples with log name and log date (datetime object)
     """
 
-    log_stream = get_logs_by_regexp(path, glob_template, datetime_template)
+    log_stream = get_logs_by_regexp_time(path, glob_template, datetime_template)
     last_log = None
     max_date = None
     for log, date in log_stream:
-        if not max_date or max_date > date:
+        if not max_date or date > max_date:
             last_log = log
             max_date = date
 
