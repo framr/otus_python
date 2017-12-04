@@ -34,6 +34,9 @@ class StatAggregator(object):
     def get_result(self):
         return self._result
 
+    def reset(self):
+        return NotImplementedError
+
 
 class OTUSRecordParser(RecordParser):
     def __init__(self, *args, **kwargs):
@@ -48,8 +51,8 @@ class OTUSRecordParser(RecordParser):
             r'"(?P<http_referer>.+)"',
             r'"(?P<http_user_agent>.+)"',
             r'"(?P<http_x_forwarded_for>.+)"',
-            r'"(?P<http_X_REQUEST_ID>)"',
-            r'"(?P<http_X_RB_USER>)"',
+            r'"(?P<http_X_REQUEST_ID>.+)"',
+            r'"(?P<http_X_RB_USER>.+)"',
             r'(?P<request_time>\S+)',
             ]
         _regexp = r'\s+'.join(_re_parts) + r'\s*\Z'
@@ -66,10 +69,13 @@ class OTUSStatAggregator(StatAggregator):
         self._result = defaultdict(list)
 
     def __call__(self, rec):
-        request = rec['request'].strip('"')
+        request = rec['request']
         url = request.split()[1]
         request_time = float(rec['request_time'])
         self._result[url].append(request_time)
+
+    def reset(self):
+        self._result = defaultdict(list)
 
 
 def _gen_open(filename):
@@ -94,7 +100,7 @@ def _gen_parsed(gen_lines, rec_parser):
     output: generator of parsed records
     """
     for line in gen_lines:
-        yield rec_parser(gen_lines)
+        yield rec_parser(line)
 
 
 def do_aggregate(filename, rec_parser, aggregator):
@@ -103,7 +109,7 @@ def do_aggregate(filename, rec_parser, aggregator):
     """
     log = _gen_open(filename)
     log_lines = _gen_lines_from_streams(log)
-    parsed_records = _gen_parsed(log_lines)
+    parsed_records = _gen_parsed(log_lines, rec_parser)
     for rec in parsed_records:
         aggregator(rec)
 
@@ -132,6 +138,11 @@ def calc_stats(data):
 
 
 def calc_url_stats(url_data, top=None):
+    """
+    url_data: dict url -> time stats
+    output: list of dicts with url name and time stats.
+    only top urls by avg time are returned.
+    """
     url_stats = {}
     total_time = 0
     total_count = 0
@@ -149,8 +160,8 @@ def calc_url_stats(url_data, top=None):
             "time_sum": url_stats[url]["sum"],
             "time_max": url_stats[url]["max"],
             "time_med": url_stats[url]["med"],
-            "count_perc": 100 * float(url_stats["url"]["count"]) / total_count,
-            "time_perc": 100 * float(url_stats["url"]["sum"]) / total_time
+            "count_perc": 100 * float(url_stats[url]["count"]) / total_count,
+            "time_perc": 100 * float(url_stats[url]["sum"]) / total_time
             })
     return result
 
