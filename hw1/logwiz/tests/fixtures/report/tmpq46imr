@@ -1,0 +1,9 @@
+
+xxx
+yyy
+!function($) {
+    var table = [{'url': 'url1', 'time': 1.0}, {'url': 'url2', 'time': 2.0}];
+    var reportDates;
+    zzz
+    fff
+    fff
