@@ -17,7 +17,8 @@ DEFAULT_CONFIG = {
     "LOG_DATE_TEMPLATE": ["nginx-access-ui.log-%Y%m%d", "nginx-access-ui.log-%Y%m%d.gz"],
     "REPORT_GLOB_TEMPLATE": "report-*.html",
     "REPORT_DATE_TEMPLATE": "report-%Y.%m.%d.html",
-    "TIMESTAMP_FILE": "/var/tmp/log_analyzer.ts"
+    "TIMESTAMP_FILE": "/var/tmp/log_analyzer.ts",
+    "SORT_FIELD": "time_sum"
 }
 
 

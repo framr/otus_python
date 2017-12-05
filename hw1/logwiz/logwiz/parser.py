@@ -174,12 +174,12 @@ def calc_url_stats(url_data, top=None):
         result.append({
             "url": url,
             "count": url_stats[url]["count"],
-            "time_avg": url_stats[url]["avg"],
-            "time_sum": url_stats[url]["sum"],
-            "time_max": url_stats[url]["max"],
-            "time_med": url_stats[url]["med"],
-            "count_perc": 100 * float(url_stats[url]["count"]) / total_count,
-            "time_perc": 100 * float(url_stats[url]["sum"]) / total_time
+            "time_avg": round(url_stats[url]["avg"], 3),
+            "time_sum": round(url_stats[url]["sum"], 3),
+            "time_max": round(url_stats[url]["max"], 3),
+            "time_med": round(url_stats[url]["med"], 3),
+            "count_perc": round(100 * float(url_stats[url]["count"]) / total_count, 3),
+            "time_perc": round(100 * float(url_stats[url]["sum"]) / total_time, 3)
             })
     return result
 

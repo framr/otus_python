@@ -23,7 +23,7 @@ def _render(template_filename, out_filename, data):
                     outfile.write(line)
 
 
-def render_report(data, outfilename, sort_by="count"):
+def render_report(data, outfilename, sort_by):
     """
     data: list of url time stats (dicts)
     """

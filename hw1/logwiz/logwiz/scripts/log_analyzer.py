@@ -67,7 +67,7 @@ def main():
     try:
         outfile = os.path.join(conf["REPORT_DIR"], date.strftime(conf["REPORT_DATE_TEMPLATE"]))
         info("Report file: %s" % outfile)
-        render_report(url_stats, outfile)
+        render_report(url_stats, outfile, conf["SORT_FIELD"])
 
         with open(conf["TIMESTAMP_FILE"], "w") as ts_file:
             timestamp = time.time()
