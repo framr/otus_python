@@ -9,6 +9,8 @@ import re
 import gzip
 from collections import defaultdict
 
+from logwiz.logger import error, info
+
 
 class RecordParser(object):
     """
@@ -67,15 +69,31 @@ class OTUSStatAggregator(StatAggregator):
     def __init__(self, *args, **kwargs):
         super(OTUSStatAggregator, self).__init__(*args, **kwargs)
         self._result = defaultdict(list)
+        self._ignore_request_errors = kwargs.get("ignore_request_errors", False)
+        self._error_count = 0
 
     def __call__(self, rec):
         request = rec['request']
-        url = request.split()[1]
+
+        try:
+            url = request.split()[1]
+        except IndexError:
+            error("Error parsing record %s" % rec)
+            if not self._ignore_request_errors:
+                raise
+            else:
+                self._error_count += 1
+                return
+
         request_time = float(rec['request_time'])
         self._result[url].append(request_time)
 
+    def cnt_errors(self):
+        return self._error_count
+
     def reset(self):
         self._result = defaultdict(list)
+        self._error_count = 0
 
 
 def _gen_open(filename):
@@ -167,9 +185,11 @@ def calc_url_stats(url_data, top=None):
 
 
 def parse_otus_log(filename, top=None):
-    parser = RecordParser()
-    aggregator = OTUSStatAggregator()
+    parser = OTUSRecordParser()
+    aggregator = OTUSStatAggregator(ignore_request_errors=True)
     do_aggregate(filename, parser, aggregator)
-    url_data = aggregator.get_value()
+    info("got %d errors while parsing log" % aggregator.cnt_errors())
+
+    url_data = aggregator.get_result()
     url_stats = calc_url_stats(url_data, top=top)
     return url_stats

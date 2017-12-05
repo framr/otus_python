@@ -7,7 +7,7 @@ import time
 from logwiz.logger import init_logger, info, error, exception
 from logwiz.conf import read_config
 from logwiz.report import render_report
-from logwiz.parser import parse_otus_log, calc_url_stats
+from logwiz.parser import parse_otus_log
 from logwiz.logutil import get_last_log
 
 
@@ -58,8 +58,7 @@ def main():
 
     info("Processing logfile %s with date %s" % (logfile, date))
     try:
-        url_data = parse_otus_log(logfile)
-        url_stats = calc_url_stats(url_data, top=conf["REPORT_SIZE"])
+        url_stats = parse_otus_log(logfile, top=conf["REPORT_SIZE"])
     except Exception:
         exception("Error parsing and processing log")
         sys.exit(0)
@@ -72,7 +71,7 @@ def main():
 
         with open(conf["TIMESTAMP_FILE"], "w") as ts_file:
             timestamp = time.time()
-            ts_file.write(timestamp)
+            ts_file.write(str(timestamp))
             os.utime(conf["TIMESTAMP_FILE"], (timestamp, timestamp))
     except Exception:
         exception("Error rendering report")

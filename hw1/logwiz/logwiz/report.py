@@ -2,6 +2,8 @@
 import os
 import json
 
+from logwiz.logger import info, exception
+
 
 TEMPLATE = "report.html"
 _ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -26,5 +28,14 @@ def render_report(data, outfilename, sort_by="count"):
     data: list of url time stats (dicts)
     """
     dump = json.dumps(sorted(data, key=lambda r: r[sort_by], reverse=True))
-    template = _get_static_data_path(TEMPLATE),
-    _render(template, outfilename, dump)
+    template = _get_static_data_path(TEMPLATE)
+    info("Using template file %s" % template)
+
+    try:
+        _render(template, outfilename, dump)
+    except Exception:
+        exception("Error rendering template")
+        try:
+            os.remove(template) # remove possibly malformed file
+        except Exception:
+            pass

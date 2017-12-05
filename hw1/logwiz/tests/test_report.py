@@ -51,6 +51,8 @@ class RenderTest(unittest.TestCase):
                 etalon,
                 result
                 )
+        os.remove(template_file.name)
+        os.remove(output_file.name)
 
 
 if __name__ == "__main__":
