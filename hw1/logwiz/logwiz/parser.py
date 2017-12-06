@@ -97,6 +97,7 @@ class OTUSStatAggregator(StatAggregator):
 
 
 def _gen_open(filename):
+    # XXX: we completely ignored encodings related stuff here
     if filename.endswith("gz"):
         with gzip.open(filename) as infile:
             yield infile
