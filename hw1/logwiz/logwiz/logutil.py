@@ -5,7 +5,7 @@ import glob
 import os
 from datetime import datetime
 
-from logwiz.logger import error
+from logwiz.logger import error, info
 
 
 def extract_date(s, date_template):
@@ -66,3 +66,31 @@ def get_last_log(path, glob_template, datetime_template):
             max_date = date
 
     return last_log, max_date
+
+
+def get_log_to_process(conf):
+    info("Searching for most recent log file")
+    last_log, log_date = get_last_log(
+        conf["LOG_DIR"],
+        conf["LOG_GLOB_TEMPLATE"],
+        conf["LOG_DATE_TEMPLATE"]
+        )
+    info("Found file %s for date %s" % (last_log, log_date))
+
+    if not last_log:
+        info("No valid logs found, abort")
+        return None, None
+
+    info("Searching for most recent report file")
+    last_report, report_date = get_last_log(
+            conf["REPORT_DIR"],
+            conf["REPORT_GLOB_TEMPLATE"],
+            conf["REPORT_DATE_TEMPLATE"]
+            )
+    info("Found report file %s for date %s" % (last_report, report_date))
+
+    if last_report and report_date >= log_date:
+        info("Last processed log %s is uptodate (cmp with %s)" % (last_report, last_log))
+        return None, None
+
+    return last_log, log_date
