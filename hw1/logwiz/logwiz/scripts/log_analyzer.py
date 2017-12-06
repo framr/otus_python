@@ -11,12 +11,25 @@ from logwiz.parser import parse_otus_log
 from logwiz.logutil import get_log_to_process
 
 
+def prepare_env(conf):
+    info("Preparing environment")
+    if not os.path.isdir(conf["REPORT_DIR"]):
+        os.makedirs(conf["REPORT_DIR"])
+
+
 def main():
 
     conf = read_config()
     init_logger(path=conf.get("LOGGER_DIR", None))
 
     # XXX: We need a lock preventing from running two scripts simultaneously here
+
+    try:
+        prepare_env(conf)
+    except OSError:
+        exception("Error preparing environment")
+        sys.exit(0)
+
     try:
         logfile, date = get_log_to_process(conf)
     except Exception:
@@ -24,7 +37,7 @@ def main():
         sys.exit(0)
 
     if not logfile:
-        info("No logs found")
+        info("No logs to process")
         sys.exit(0)
 
     info("Processing logfile %s with date %s" % (logfile, date))
