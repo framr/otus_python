@@ -1,0 +1,22 @@
+Package logwiz (log wizard) - analyse requests timing statistics.
+
+1. Installation
+git clone https://github.com/framr/otus_python.git
+cd otus_python/hw1/logwiz
+python setup.py install
+
+2. Configuration
+Script has a default config (see conf.py) which can be redefined either via
+/usr/local/etc/log_analyzer.conf file or with custom config file (via --config option)
+
+3. Testing
+Running unittests:
+git clone https://github.com/framr/otus_python.git
+cd otus_python/hw1/logwiz
+Install script with python setup.py install.
+Run python setup.py test
+
+You may also try script on sample data:
+cd itests/fixtures1
+log_analyzer.py
+
