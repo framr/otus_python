@@ -34,11 +34,14 @@ def read_config():
             error("Provided config file %s is not a valid file, abort")
             sys.exit(0)
         info("Reading config from custom conf file %s" % args.conf)
-        conf = json.load(args.conf)  # XXX: update default dict?
+        with open(args.conf) as conf_file:
+            conf = json.load(conf_file)  # XXX: update default dict?
 
     elif os.path.isfile(DEFAULT_CONFIG_LOCATION):
         info("Found external config file %s, reading config from it" % DEFAULT_CONFIG_LOCATION)
-        conf = json.load(DEFAULT_CONFIG_LOCATION)  # XXX: update default dict?
+
+        with open(DEFAULT_CONFIG_LOCATION) as config_file:
+            conf = json.load(config_file)  # XXX: update default dict?
     else:
         info("No config files found, using defaults")
 
