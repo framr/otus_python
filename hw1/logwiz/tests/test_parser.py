@@ -1,20 +1,16 @@
+# -*- coding: utf-8 -*-
 import unittest
 import os
 
-from logwiz.parser import OTUSRecordParser, OTUSStatAggregator, do_aggregate,\
-        calc_stats, calc_url_stats
+from logwiz.parser import do_aggregate, parse_line, calc_stats, calc_url_stats
 
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures")
 LOG_PATH = os.path.join(FIXTURE_PATH, "do_aggregate")
 
 
-class OTUSRecordParserTest(unittest.TestCase):
-
-    def setUp(self):
-        self.parser = OTUSRecordParser()
-
-    def test_record_parser(self):
-        record = '1.196.116.32 -  - [29/Jun/2017:03:50:22 +0300] "GET /api/v2/banner/25019354 HTTP/1.1" 200 927 "-" "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390'
+class ParseLineTest(unittest.TestCase):
+    def test_parse_line(self):
+        record = u'1.196.116.32 -  - [29/Jun/2017:03:50:22 +0300] "GET /api/v2/banner/25019354 HTTP/1.1" 200 927 "-" "Lynx/2.8.8dev.9 libwww-FM/2.14 SSL-MM/1.4.1 GNUTLS/2.10.5" "-" "1498697422-2190034393-4708-9752759" "dc7161be3" 0.390'
         etalon = {
                     'remote_addr': '1.196.116.32',
                     'remote_user': '-',
@@ -31,44 +27,14 @@ class OTUSRecordParserTest(unittest.TestCase):
                     'request_time': '0.390'
                 }
 
-        res = self.parser(record)
+        res = parse_line(record)
         self.assertEquals(res, etalon)
 
 
-class OTUSStatAggregatorTest(unittest.TestCase):
-    def setUp(self):
-        self.aggregator = OTUSStatAggregator()
-
-    def test_aggregator(self):
-        records = [
-                {'request': 'GET url1 HTTP/1.1', 'request_time': '1.0'},
-                {'request': 'GET url1 HTTP/1.1', 'request_time': '2.0'},
-                {'request': 'GET url1 HTTP/1.1', 'request_time': '3.0'},
-                {'request': 'GET url2 HTTP/1.1', 'request_time': '0.1'}
-                ]
-
-        for r in records:
-            self.aggregator(r)
-
-        res = self.aggregator.get_result()
-        self.assertEqual(res, {'url1': [1.0, 2.0, 3.0], 'url2': [0.1]})
-
-    def test_norequest(self):
-        r = {'request': 'GET url1 HTTP/1.1', 'request_time': '1.0'}
-        self.assertRaises(KeyError, self.aggregator(r))
-
-
 class DoAggregateTest(unittest.TestCase):
-
-    def setUp(self):
-        self.parser = OTUSRecordParser()
-        self.aggregator = OTUSStatAggregator()
-
     def test_do_aggregate1(self):
         log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2")
-        self.aggregator.reset()
-        do_aggregate(log1, self.parser, self.aggregator)
-        res = self.aggregator.get_result()
+        res = do_aggregate(log1)
         etalon = {
                 '/api/v2/banner/25019354': [0.390],
                 '/api/1/photogenic_banners/list/?server_name=WIN7RB4': [0.133]
@@ -77,15 +43,24 @@ class DoAggregateTest(unittest.TestCase):
 
     def test_do_aggregate2(self):
         log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2_2")
-        self.aggregator.reset()
-        do_aggregate(log1, self.parser, self.aggregator)
-        res = self.aggregator.get_result()
+        res = do_aggregate(log1)
         etalon = {
                 '/api/v2/banner/25019354': [0.390],
                 '/api/1/photogenic_banners/list/?server_name=WIN7RB4': [0.133, 0.266]
                 }
         self.assertEquals(res, etalon)
 
+    
+    def test_do_aggregate_parse_errors_above_thresh(self):
+        log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2_3")
+        self.assertRaises(TypeError, do_aggregate, log1, max_errors=1)
+
+    def test_do_aggregate_parse_errors_below_thresh(self):
+        log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2_3")
+        try:
+            do_aggregate(log1, max_errors=2)
+        except Exception:
+            self.fail("Exceptions should be suppressed here")
 
 class CalcStatsTest(unittest.TestCase):
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import unittest
 import os
 from datetime import datetime
@@ -22,16 +23,27 @@ class GetLogToProcessTest(unittest.TestCase):
     def test_no_logs_no_reports(self):
         self.conf["LOG_DIR"] = os.path.join(LOG_PATH, "log_no_logs")
         self.conf["REPORT_DIR"] = os.path.join(LOG_PATH, "report_no_logs")
-        self.assertEquals(
-                get_log_to_process(self.conf),
-                (None, None)
+        self.assertIsNone(
+                get_log_to_process(
+                    self.conf["LOG_DIR"],
+                    self.conf["LOG_GLOB_TEMPLATE"],
+                    self.conf["LOG_DATE_TEMPLATE"],
+                    self.conf["REPORT_DIR"],
+                    self.conf["REPORT_DATE_TEMPLATE"]
+                    )
                 )
 
     def test_no_reports(self):
         self.conf["LOG_DIR"] = os.path.join(LOG_PATH, "log_last_20170701")
         self.conf["REPORT_DIR"] = os.path.join(LOG_PATH, "report_no_logs")
         self.assertEquals(
-                get_log_to_process(self.conf),
+                get_log_to_process(
+                    self.conf["LOG_DIR"],
+                    self.conf["LOG_GLOB_TEMPLATE"],
+                    self.conf["LOG_DATE_TEMPLATE"],
+                    self.conf["REPORT_DIR"],
+                    self.conf["REPORT_DATE_TEMPLATE"]
+                    ),
                 (os.path.join(self.conf["LOG_DIR"], "nginx-access-ui.log-20170701"),
                     datetime(2017, 07, 01))
                 )
@@ -40,7 +52,13 @@ class GetLogToProcessTest(unittest.TestCase):
         self.conf["LOG_DIR"] = os.path.join(LOG_PATH, "log_last_20170701")
         self.conf["REPORT_DIR"] = os.path.join(LOG_PATH, "report_last_20170630")
         self.assertEquals(
-                get_log_to_process(self.conf),
+                get_log_to_process(
+                    self.conf["LOG_DIR"],
+                    self.conf["LOG_GLOB_TEMPLATE"],
+                    self.conf["LOG_DATE_TEMPLATE"],
+                    self.conf["REPORT_DIR"],
+                    self.conf["REPORT_DATE_TEMPLATE"]
+                    ),
                 (os.path.join(self.conf["LOG_DIR"], "nginx-access-ui.log-20170701"),
                     datetime(2017, 07, 01))
                 )
@@ -48,9 +66,14 @@ class GetLogToProcessTest(unittest.TestCase):
     def test_last_log_processed(self):
         self.conf["LOG_DIR"] = os.path.join(LOG_PATH, "log_last_20170701")
         self.conf["REPORT_DIR"] = os.path.join(LOG_PATH, "report_last_20170701")
-        self.assertEquals(
-                get_log_to_process(self.conf),
-                (None, None)
+        self.assertIsNone(
+                get_log_to_process(
+                    self.conf["LOG_DIR"],
+                    self.conf["LOG_GLOB_TEMPLATE"],
+                    self.conf["LOG_DATE_TEMPLATE"],
+                    self.conf["REPORT_DIR"],
+                    self.conf["REPORT_DATE_TEMPLATE"]
+                    )
                 )
 
 

@@ -8,129 +8,64 @@
 import re
 import gzip
 from collections import defaultdict
+import io
 
-from logwiz.logger import error, info
-
-
-class RecordParser(object):
-    """
-    Class parsing single log line
-    """
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def __call__(self, rec):
-        raise NotImplementedError
+from logwiz.logger import info, exception
 
 
-class StatAggregator(object):
-    """
-    Class aggregating statistics from log lines.
-    """
-    def __init__(self, *args, **kwargs):
-        self._result = None
-
-    def __call__(self, recs):
-        raise NotImplementedError
-
-    def get_result(self):
-        return self._result
-
-    def reset(self):
-        return NotImplementedError
-
-
-class OTUSRecordParser(RecordParser):
-    def __init__(self, *args, **kwargs):
-        _re_parts = [
-            r'(?P<remote_addr>\S+)',
-            r'(?P<remote_user>\S+)',
-            r'(?P<http_x_real_ip>\S+)',
-            r'\[(?P<time_local>.+)\]',
-            r'"(?P<request>.+)"',
-            r'(?P<status>\d+)',
-            r'(?P<body_bytes_sent>\S+)',
-            r'"(?P<http_referer>.+)"',
-            r'"(?P<http_user_agent>.+)"',
-            r'"(?P<http_x_forwarded_for>.+)"',
-            r'"(?P<http_X_REQUEST_ID>.+)"',
-            r'"(?P<http_X_RB_USER>.+)"',
-            r'(?P<request_time>\S+)',
-            ]
-        _regexp = r'\s+'.join(_re_parts) + r'\s*\Z'
-        self._regexp = re.compile(_regexp)
-
-    def __call__(self, rec):
-        match = self._regexp.match(rec)
-        return match.groupdict()
+_RE_PARTS = [
+    r'(?P<remote_addr>\S+)',
+    r'(?P<remote_user>\S+)',
+    r'(?P<http_x_real_ip>\S+)',
+    r'\[(?P<time_local>.+)\]',
+    r'"(?P<request>.+)"',
+    r'(?P<status>\d+)',
+    r'(?P<body_bytes_sent>\S+)',
+    r'"(?P<http_referer>.+)"',
+    r'"(?P<http_user_agent>.+)"',
+    r'"(?P<http_x_forwarded_for>.+)"',
+    r'"(?P<http_X_REQUEST_ID>.+)"',
+    r'"(?P<http_X_RB_USER>.+)"',
+    r'(?P<request_time>\S+)',
+    ]
+REGEXP = re.compile(r'\s+'.join(_RE_PARTS) + r'\s*\Z', flags=re.UNICODE)
 
 
-class OTUSStatAggregator(StatAggregator):
-    def __init__(self, *args, **kwargs):
-        super(OTUSStatAggregator, self).__init__(*args, **kwargs)
-        self._result = defaultdict(list)
-        self._ignore_request_errors = kwargs.get("ignore_request_errors", False)
-        self._error_count = 0
-
-    def __call__(self, rec):
-        request = rec['request']
-
-        try:
-            url = request.split()[1]
-        except IndexError:
-            error("Error parsing record %s" % rec)
-            if not self._ignore_request_errors:
-                raise
-            else:
-                self._error_count += 1
-                return
-
-        request_time = float(rec['request_time'])
-        self._result[url].append(request_time)
-
-    def cnt_errors(self):
-        return self._error_count
-
-    def reset(self):
-        self._result = defaultdict(list)
-        self._error_count = 0
+def parse_line(line):
+    match = REGEXP.match(line)
+    return match.groupdict() if match else None
 
 
-def _gen_open(filename):
-    # XXX: we completely ignored encodings related stuff here
+def _gen_parsed_lines(filename, encoding):
     if filename.endswith("gz"):
         with gzip.open(filename) as infile:
-            yield infile
+            for line in infile:
+                yield parse_line(line.decode(encoding))
     else:
-        with open(filename) as infile:
-            yield infile
+        with io.open(filename, encoding=encoding) as infile:
+            for line in infile:
+                yield parse_line(line)
 
 
-def _gen_lines_from_streams(gen_stream):
-    for s in gen_stream:
-        for line in s:
-            yield line
-
-
-def _gen_parsed(gen_lines, rec_parser):
-    """
-    gen_lines: generator yielding log lines
-    rec_parser: line parser
-    output: generator of parsed records
-    """
-    for line in gen_lines:
-        yield rec_parser(line)
-
-
-def do_aggregate(filename, rec_parser, aggregator):
+def do_aggregate(filename, encoding="utf-8", max_errors=0):
     """
     apply custom aggregator class iteratively to log
     """
-    log = _gen_open(filename)
-    log_lines = _gen_lines_from_streams(log)
-    parsed_records = _gen_parsed(log_lines, rec_parser)
+    parsed_records = _gen_parsed_lines(filename, encoding)
+    stats = defaultdict(list)
+    errors_count = 0
     for rec in parsed_records:
-        aggregator(rec)
+        try:
+            url = rec['request'].split()[1]
+            stats[url].append(float(rec['request_time']))
+        except Exception:
+            errors_count += 1
+            exception("Error parsing record %s" % rec)
+            if errors_count > max_errors:
+                raise
+
+    info("Got %d errors while parsing log" % errors_count)
+    return stats
 
 
 def calc_stats(data):
@@ -185,12 +120,7 @@ def calc_url_stats(url_data, top=None):
     return result
 
 
-def parse_otus_log(filename, top=None):
-    parser = OTUSRecordParser()
-    aggregator = OTUSStatAggregator(ignore_request_errors=True)
-    do_aggregate(filename, parser, aggregator)
-    info("got %d errors while parsing log" % aggregator.cnt_errors())
-
-    url_data = aggregator.get_result()
+def parse_otus_log(filename, encoding="utf-8", top=None, max_errors=0):
+    url_data = do_aggregate(filename, encoding=encoding, max_errors=max_errors)
     url_stats = calc_url_stats(url_data, top=top)
     return url_stats

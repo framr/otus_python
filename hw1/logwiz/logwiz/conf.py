@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
-from argparse import ArgumentParser
 import json
-import sys
-import os
-
-from logwiz.logger import error, info
+import logging
 
 
 DEFAULT_CONFIG_LOCATION = "/usr/local/etc/log_analyzer.conf"
+DEFAULT_LOGGING_LEVEL = logging.DEBUG
 DEFAULT_CONFIG = {
     "REPORT_SIZE": 1000,
     "REPORT_DIR": "./reports",
@@ -15,34 +12,18 @@ DEFAULT_CONFIG = {
     "LOGGER_DIR": "./logger",
     "LOG_GLOB_TEMPLATE": "nginx-access-ui.log-*",
     "LOG_DATE_TEMPLATE": ["nginx-access-ui.log-%Y%m%d", "nginx-access-ui.log-%Y%m%d.gz"],
-    "REPORT_GLOB_TEMPLATE": "report-*.html",
     "REPORT_DATE_TEMPLATE": "report-%Y.%m.%d.html",
     "TIMESTAMP_FILE": "/var/tmp/log_analyzer.ts",
-    "SORT_FIELD": "time_sum"
+    "SORT_FIELD": "time_sum",
+    "MAX_PARSING_ERRORS": 100,
+    "LOG_ENCODING": "utf-8",
+    "REPORT_ENCODING": "utf-8"
 }
 
 
-def read_config():
-    argparser = ArgumentParser()
-    argparser.add_argument("--config", dest="conf", type=str, default=None,
-                           help="config file")
-    args = argparser.parse_args()
-
+def read_config(config_file=None):
     conf = DEFAULT_CONFIG
-    if args.conf:
-        if not os.path.isfile(args.conf):
-            error("Provided config file %s is not a valid file, abort")
-            sys.exit(0)
-        info("Reading config from custom conf file %s" % args.conf)
-        with open(args.conf) as conf_file:
-            conf = json.load(conf_file)  # XXX: update default dict?
-
-    elif os.path.isfile(DEFAULT_CONFIG_LOCATION):
-        info("Found external config file %s, reading config from it" % DEFAULT_CONFIG_LOCATION)
-
-        with open(DEFAULT_CONFIG_LOCATION) as config_file:
-            conf = json.load(config_file)  # XXX: update default dict?
-    else:
-        info("No config files found, using defaults")
-
+    if config_file:
+        with open(config_file) as conf_file:
+            conf.update(json.load(conf_file))
     return conf

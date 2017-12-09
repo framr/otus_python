@@ -4,8 +4,12 @@
 import glob
 import os
 from datetime import datetime
+from collections import namedtuple
 
 from logwiz.logger import error, info
+
+
+LogWithDate = namedtuple("Log", "name date")
 
 
 def extract_date(s, date_template):
@@ -17,7 +21,6 @@ def extract_date(s, date_template):
     output: datetime object
         in case of no match returns None
     """
-
     date = None
     if isinstance(date_template, list):
         for templ in date_template:
@@ -46,51 +49,23 @@ def get_logs_by_regexp_time(path, glob_template, datetime_template):
         log_date = extract_date(os.path.basename(filename), datetime_template)
         if not log_date:
             error("Malformed log name %s, date can not be extracted" % filename)
-
         yield filename, log_date
 
 
-def get_last_log(path, glob_template, datetime_template):
-    """
-    Get last log in a path matching templates
-    datetime_template: template used for extracting date from log name
-    output: tuples with log name and log date (datetime object)
-    """
-
-    log_stream = get_logs_by_regexp_time(path, glob_template, datetime_template)
-    last_log = None
-    max_date = None
+def get_log_to_process(log_dir, glob_template, date_template, report_dir, report_date_template):
+    log_stream = get_logs_by_regexp_time(log_dir, glob_template, date_template)
+    last_log, max_date = None, None
     for log, date in log_stream:
         if not max_date or date > max_date:
             last_log = log
             max_date = date
 
-    return last_log, max_date
-
-
-def get_log_to_process(conf):
-    info("Searching for most recent log file")
-    last_log, log_date = get_last_log(
-        conf["LOG_DIR"],
-        conf["LOG_GLOB_TEMPLATE"],
-        conf["LOG_DATE_TEMPLATE"]
-        )
-    info("Found file %s for date %s" % (last_log, log_date))
-
     if not last_log:
         info("No valid logs found, abort")
-        return None, None
+        return None
 
-    info("Searching for most recent report file")
-    last_report, report_date = get_last_log(
-            conf["REPORT_DIR"],
-            conf["REPORT_GLOB_TEMPLATE"],
-            conf["REPORT_DATE_TEMPLATE"]
-            )
-    info("Found report file %s for date %s" % (last_report, report_date))
-
-    if last_report and report_date >= log_date:
-        info("Last processed log %s is uptodate (cmp with %s)" % (last_report, last_log))
-        return None, None
-
-    return last_log, log_date
+    report_file = max_date.strftime(report_date_template)
+    if os.path.isfile(os.path.join(report_dir, report_file)):
+        info("Last processed log %s is uptodate (cmp with %s)" % (report_file, last_log))
+        return None
+    return LogWithDate(last_log, max_date)

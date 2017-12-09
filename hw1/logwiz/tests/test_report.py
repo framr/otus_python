@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 import unittest
 import os
 from tempfile import NamedTemporaryFile
 from textwrap import dedent
 
-from logwiz.report import _render
+from logwiz.report import render_report
 
 
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -12,7 +13,7 @@ TEMPLATE_PATH = os.path.join(FIXTURE_PATH, "report")
 
 class RenderTest(unittest.TestCase):
     def test_render(self):
-        data = "[{'url': 'url1', 'time': 1.0}, {'url': 'url2', 'time': 2.0}]"
+        data = [{"url": "url1", "time": 1.0}, {"url": "url2", "time": 2.0}]
         test_template = dedent(
             """
             xxx
@@ -31,7 +32,7 @@ class RenderTest(unittest.TestCase):
         output_file = NamedTemporaryFile(mode='wb', dir=TEMPLATE_PATH, delete=False)
         output_file.close()
 
-        _render(template_file.name, output_file.name, data)
+        render_report(data, output_file.name, sort_by='time', template_file=template_file.name)
         with open(output_file.name) as temp:
             result = temp.read()
 
@@ -40,7 +41,7 @@ class RenderTest(unittest.TestCase):
                 xxx
                 yyy
                 !function($) {
-                    var table = [{'url': 'url1', 'time': 1.0}, {'url': 'url2', 'time': 2.0}];
+                    var table = [{"url": "url2", "time": 2.0}, {"url": "url1", "time": 1.0}];
                     var reportDates;
                     zzz
                     fff

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
+import io
 import json
-
-from logwiz.logger import info, exception
+from string import Template
 
 
 TEMPLATE = "report.html"
@@ -13,29 +13,12 @@ def _get_static_data_path(filename):
     return os.path.join(_ROOT, "static", filename)
 
 
-def _render(template_filename, out_filename, data):
-    with open(out_filename, "w") as outfile:
-        with open(template_filename) as templ:
-            for line in templ:
-                if "$table_json" in line:
-                    outfile.write(line.replace("$table_json", data))
-                else:
-                    outfile.write(line)
-
-
-def render_report(data, outfilename, sort_by):
+def render_report(data, outfilename, sort_by, encoding="utf-8", template_file=None):
     """
     data: list of url time stats (dicts)
     """
-    dump = json.dumps(sorted(data, key=lambda r: r[sort_by], reverse=True))
-    template = _get_static_data_path(TEMPLATE)
-    info("Using template file %s" % template)
-
-    try:
-        _render(template, outfilename, dump)
-    except Exception:
-        exception("Error rendering template")
-        try:
-            os.remove(template) # remove possibly malformed file
-        except Exception:
-            pass
+    dump = json.dumps(sorted(data, key=lambda r: r[sort_by], reverse=True), encoding=encoding)
+    template_filename = template_file or _get_static_data_path(TEMPLATE)
+    with io.open(outfilename, "w", encoding=encoding) as outfile:
+        with io.open(template_filename, encoding=encoding) as templ:
+            outfile.write(Template(templ.read()).safe_substitute(table_json=dump))
