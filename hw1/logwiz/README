@@ -18,5 +18,5 @@ Run python setup.py test
 
 You may also try script on sample data:
 cd itests/fixtures1
-log_analyzer.py
+log_analyzer.py --conf conf.json
 
