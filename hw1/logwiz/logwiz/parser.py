@@ -72,7 +72,7 @@ def do_aggregate(filename, encoding="utf-8", max_errors=None, max_errors_ratio=1
         count += 1
 
     parse_ratio = 100 * float(errors_count) / count
-    info("Got %d errors while parsing log (%0.1f%%)" % (errors_count, parse_ratio))
+    info("Got %d errors while parsing log (%0.2f%%)" % (errors_count, parse_ratio))
     if parse_ratio > max_errors_ratio:
         raise ParseError("Max allowed parsing errors ratio exceeded (%d error out of %d)" % (errors_count, count))
 

@@ -32,11 +32,20 @@ def init_logger(level, log_dir=None):
             )
 
 
+def report_to_create(path, date, template):
+    report_file = os.path.join(path, date.strftime(template))
+    return report_file if not os.path.isfile(report_file) else None
+
+
 def write_timestamp(fname):
     with open(fname, "w") as ts_file:
         timestamp = time.time()
         ts_file.write(str(timestamp))
         os.utime(fname, (timestamp, timestamp))
+
+
+class NothingToProcess(Exception):
+    pass
 
 
 def main():
@@ -55,18 +64,19 @@ def main():
 
     try:
         last_log = get_last_log(conf["LOG_DIR"], conf["LOG_TEMPLATE"])
-    except BaseException:
-        exception("Unable to find logs to process")
-        sys.exit(1)
-    else:
         if not last_log:
             info("No logs to process")
-            sys.exit(0)
+            raise NothingToProcess
 
-        report_file = os.path.join(conf["REPORT_DIR"], last_log.date.strftime(conf["REPORT_DATE_TEMPLATE"]))
-        if os.path.isfile(report_file):
-            info("Last processed log %s is uptodate (cmp with %s)" % (report_file, last_log))
-            sys.exit(0)
+        report_file = report_to_create(conf["REPORT_DIR"], last_log.date, conf["REPORT_DATE_TEMPLATE"])
+        if not report_file:
+            info("Last report for log %s is uptodate" % last_log.name)
+            raise NothingToProcess
+    except NothingToProcess:
+        sys.exit(0)
+    except BaseException:
+        exception("Got error while searching for log to process")
+        sys.exit(1)
 
     try:
         info("Processing logfile %s with date %s" % (last_log.name, last_log.date))
