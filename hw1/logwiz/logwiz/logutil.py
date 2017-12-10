@@ -1,71 +1,25 @@
 # -*- coding: utf-8 -*-
 # Utils for retrieving available logs. Normally such utils should be in separate package.
 
-import glob
+import re
 import os
-from datetime import datetime
 from collections import namedtuple
-
-from logwiz.logger import error, info
-
+from datetime import datetime
 
 LogWithDate = namedtuple("Log", "name date")
 
 
-def extract_date(s, date_template):
-    """
-    Extract date from log name.
-    date template: template recognized by datetime.strptime function.
-    can be either string with template or a list of templates
-    (date is taken from first successful match).
-    output: datetime object
-        in case of no match returns None
-    """
-    date = None
-    if isinstance(date_template, list):
-        for templ in date_template:
-            try:
-                date = datetime.strptime(s, templ)
-            except ValueError:
-                continue
-            break
-    else:
-        try:
-            date = datetime.strptime(s, date_template)
-        except ValueError:
-            pass
-    return date
-
-
-def get_logs_by_regexp_time(path, glob_template, datetime_template):
-    """
-    Generator yielding logs matching specific template in a path.
-    glob_template: logs are filtered based on unix glob in this template.
-    datetime_template: template used for extracting date from log name
-    output: tuples with log name and log date (datetime object)
-    """
-    log_files = glob.glob(os.path.join(path, glob_template))
-    for filename in log_files:
-        log_date = extract_date(os.path.basename(filename), datetime_template)
-        if not log_date:
-            error("Malformed log name %s, date can not be extracted" % filename)
-        yield filename, log_date
-
-
-def get_log_to_process(log_dir, glob_template, date_template, report_dir, report_date_template):
-    log_stream = get_logs_by_regexp_time(log_dir, glob_template, date_template)
-    last_log, max_date = None, None
-    for log, date in log_stream:
-        if not max_date or date > max_date:
-            last_log = log
-            max_date = date
-
-    if not last_log:
-        info("No valid logs found, abort")
+def get_last_log(log_dir, log_template):
+    log_re = re.compile(log_template)
+    if not os.path.exists(log_dir):
         return None
 
-    report_file = max_date.strftime(report_date_template)
-    if os.path.isfile(os.path.join(report_dir, report_file)):
-        info("Last processed log %s is uptodate (cmp with %s)" % (report_file, last_log))
-        return None
-    return LogWithDate(last_log, max_date)
+    last_log = last_log_date = None
+    for fname in os.listdir(log_dir):
+        m = log_re.match(fname)
+        if not m:
+            continue
+        dt = m.group("DATE")
+        if not last_log or dt > last_log_date:
+            last_log, last_log_date = fname, dt
+    return LogWithDate(last_log, datetime.strptime(last_log_date, "%Y%m%d")) if last_log else None

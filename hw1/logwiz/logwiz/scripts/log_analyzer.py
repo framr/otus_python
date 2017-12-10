@@ -10,7 +10,7 @@ from argparse import ArgumentParser
 from logwiz.conf import read_config, DEFAULT_CONFIG_LOCATION, DEFAULT_LOGGING_LEVEL
 from logwiz.report import render_report
 from logwiz.parser import parse_otus_log
-from logwiz.logutil import get_log_to_process
+from logwiz.logutil import get_last_log
 
 
 def prepare_env(conf):
@@ -32,6 +32,13 @@ def init_logger(level, log_dir=None):
             )
 
 
+def write_timestamp(fname):
+    with open(fname, "w") as ts_file:
+        timestamp = time.time()
+        ts_file.write(str(timestamp))
+        os.utime(fname, (timestamp, timestamp))
+
+
 def main():
     argparser = ArgumentParser()
     argparser.add_argument("--config", dest="config", type=str, default=DEFAULT_CONFIG_LOCATION,
@@ -40,65 +47,42 @@ def main():
     conf = read_config(args.config)
     init_logger(log_dir=conf.get("LOGGER_DIR", None), level=DEFAULT_LOGGING_LEVEL)
 
-    # XXX: We need a lock preventing from running two scripts simultaneously here
     try:
         prepare_env(conf)
-    except OSError:
+    except BaseException:
         exception("Error preparing environment")
         sys.exit(1)
 
     try:
-        logfile = get_log_to_process(
-                conf["LOG_DIR"],
-                conf["LOG_GLOB_TEMPLATE"],
-                conf["LOG_DATE_TEMPLATE"],
-                conf["REPORT_DIR"],
-                conf["REPORT_DATE_TEMPLATE"]
-                )
-    except Exception:
+        last_log = get_last_log(conf["LOG_DIR"], conf["LOG_TEMPLATE"])
+    except BaseException:
         exception("Unable to find logs to process")
         sys.exit(1)
-    if not logfile:
-        info("No logs to process")
-        sys.exit(0)
+    else:
+        if not last_log:
+            info("No logs to process")
+            sys.exit(0)
 
-    info("Processing logfile %s with date %s" % (logfile.name, logfile.date))
+        report_file = os.path.join(conf["REPORT_DIR"], last_log.date.strftime(conf["REPORT_DATE_TEMPLATE"]))
+        if os.path.isfile(report_file):
+            info("Last processed log %s is uptodate (cmp with %s)" % (report_file, last_log))
+            sys.exit(0)
+
     try:
-        url_stats = parse_otus_log(
-                logfile.name,
-                encoding="utf-8",
-                top=conf["REPORT_SIZE"],
-                max_errors=conf["MAX_PARSING_ERRORS"]
-                )
-    except Exception:
+        info("Processing logfile %s with date %s" % (last_log.name, last_log.date))
+        url_stats = parse_otus_log(os.path.join(conf["LOG_DIR"], last_log.name), encoding=conf["LOG_ENCODING"],
+                                   top=conf["REPORT_SIZE"], max_errors=conf["MAX_ERRORS"],
+                                   max_errors_ratio=conf["MAX_ERRORS_RATIO"])
+        info("Rendering report %s" % report_file)
+        render_report(url_stats, report_file, conf["SORT_FIELD"], conf["REPORT_ENCODING"])
+        write_timestamp(conf["TIMESTAMP_FILE"])
+    except BaseException:
         exception("Error parsing and processing log")
-        sys.exit(1)
-
-    info("Rendering report for date %s" % logfile.date)
-    try:
-        outfile = os.path.join(
-                conf["REPORT_DIR"],
-                logfile.date.strftime(conf["REPORT_DATE_TEMPLATE"])
-                )
-        info("Report file: %s" % outfile)
-        render_report(
-                url_stats,
-                outfile,
-                conf["SORT_FIELD"],
-                conf["REPORT_ENCODING"]
-                )
-    except Exception:
-        exception("Error rendering report")
         try:
-            os.remove(outfile)  # remove possibly malformed file
+            os.remove(report_file)  # remove possibly malformed file
         except OSError:
             pass
         sys.exit(1)
-
-    with open(conf["TIMESTAMP_FILE"], "w") as ts_file:
-        timestamp = time.time()
-        ts_file.write(str(timestamp))
-        os.utime(conf["TIMESTAMP_FILE"], (timestamp, timestamp))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 import unittest
 import os
 
-from logwiz.parser import do_aggregate, parse_line, calc_stats, calc_url_stats
+from logwiz.parser import do_aggregate, parse_line, calc_stats, calc_url_stats, ParseError
 
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures")
 LOG_PATH = os.path.join(FIXTURE_PATH, "do_aggregate")
@@ -50,17 +50,28 @@ class DoAggregateTest(unittest.TestCase):
                 }
         self.assertEquals(res, etalon)
 
-    
-    def test_do_aggregate_parse_errors_above_thresh(self):
+    def test_do_aggregate_parse_errors_count_above_thresh(self):
         log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2_3")
         self.assertRaises(TypeError, do_aggregate, log1, max_errors=1)
 
-    def test_do_aggregate_parse_errors_below_thresh(self):
+    def test_do_aggregate_parse_errors_count_below_thresh(self):
         log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2_3")
         try:
             do_aggregate(log1, max_errors=2)
         except Exception:
             self.fail("Exceptions should be suppressed here")
+
+    def test_do_aggregate_parse_errors_ratio_above_thresh(self):
+        log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2_3")
+        self.assertRaises(ParseError, do_aggregate, log1, max_errors_ratio=50.0)
+
+    def test_do_aggregate_parse_errors_ratio_below_thresh(self):
+        log1 = os.path.join(LOG_PATH, "nginx-access-ui.log-20170701_2_3")
+        try:
+            do_aggregate(log1, max_errors_ratio=70.0)
+        except ParseError:
+            self.fail("Exceptions should be suppressed by max_errors_ratio")
+
 
 class CalcStatsTest(unittest.TestCase):
 

@@ -10,12 +10,12 @@ DEFAULT_CONFIG = {
     "REPORT_DIR": "./reports",
     "LOG_DIR": "./log",
     "LOGGER_DIR": "./logger",
-    "LOG_GLOB_TEMPLATE": "nginx-access-ui.log-*",
-    "LOG_DATE_TEMPLATE": ["nginx-access-ui.log-%Y%m%d", "nginx-access-ui.log-%Y%m%d.gz"],
+    "LOG_TEMPLATE": r"nginx-access-ui.log-(?P<DATE>\d{8})(\.gz)?",
     "REPORT_DATE_TEMPLATE": "report-%Y.%m.%d.html",
     "TIMESTAMP_FILE": "/var/tmp/log_analyzer.ts",
     "SORT_FIELD": "time_sum",
-    "MAX_PARSING_ERRORS": 100,
+    "MAX_ERRORS": 100,
+    "MAX_ERRORS_RATIO": 10,
     "LOG_ENCODING": "utf-8",
     "REPORT_ENCODING": "utf-8"
 }

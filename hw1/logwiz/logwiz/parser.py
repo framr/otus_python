@@ -31,6 +31,10 @@ _RE_PARTS = [
 REGEXP = re.compile(r'\s+'.join(_RE_PARTS) + r'\s*\Z', flags=re.UNICODE)
 
 
+class ParseError(Exception):
+    pass
+
+
 def parse_line(line):
     match = REGEXP.match(line)
     return match.groupdict() if match else None
@@ -47,13 +51,15 @@ def _gen_parsed_lines(filename, encoding):
                 yield parse_line(line)
 
 
-def do_aggregate(filename, encoding="utf-8", max_errors=0):
+def do_aggregate(filename, encoding="utf-8", max_errors=None, max_errors_ratio=100.0):
     """
     apply custom aggregator class iteratively to log
+    max_errors: -1 -> parameter ignored
     """
     parsed_records = _gen_parsed_lines(filename, encoding)
     stats = defaultdict(list)
     errors_count = 0
+    count = 0
     for rec in parsed_records:
         try:
             url = rec['request'].split()[1]
@@ -61,10 +67,15 @@ def do_aggregate(filename, encoding="utf-8", max_errors=0):
         except Exception:
             errors_count += 1
             exception("Error parsing record %s" % rec)
-            if errors_count > max_errors:
+            if max_errors is not None and errors_count > max_errors:
                 raise
+        count += 1
 
-    info("Got %d errors while parsing log" % errors_count)
+    parse_ratio = 100 * float(errors_count) / count
+    info("Got %d errors while parsing log (%0.1f%%)" % (errors_count, parse_ratio))
+    if parse_ratio > max_errors_ratio:
+        raise ParseError("Max allowed parsing errors ratio exceeded (%d error out of %d)" % (errors_count, count))
+
     return stats
 
 
@@ -120,7 +131,7 @@ def calc_url_stats(url_data, top=None):
     return result
 
 
-def parse_otus_log(filename, encoding="utf-8", top=None, max_errors=0):
-    url_data = do_aggregate(filename, encoding=encoding, max_errors=max_errors)
+def parse_otus_log(filename, encoding="utf-8", top=None, max_errors=None, max_errors_ratio=100.0):
+    url_data = do_aggregate(filename, encoding=encoding, max_errors=max_errors, max_errors_ratio=max_errors_ratio)
     url_stats = calc_url_stats(url_data, top=top)
     return url_stats
