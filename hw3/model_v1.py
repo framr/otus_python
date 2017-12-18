@@ -2,10 +2,9 @@
 """
 Autostorage/Validated recipe is from Fluent Python by Luciano Ramalho (ch. 20, example 20-6)
 """
- 
+
 import re
 import numbers
-#import abc
 import inspect
 from datetime import datetime, timedelta
 from logging import exception
@@ -31,17 +30,20 @@ def missing(val):
 
 class AutoStorage(object):
     _counter = 0
+
     def __init__(self):
         _cls = self.__class__
         prefix = _cls.__name__
         index = _cls._counter
         self.storage_name = "_{}#{}".format(prefix, index)
         _cls._counter += 1
+
     def __get__(self, instance, owner):
         if instance is None:
             return self
         else:
             return getattr(instance, self.storage_name)
+
     def __set__(self, instance, value):
         setattr(instance, self.storage_name, value)
 
@@ -102,6 +104,7 @@ class PhoneField(Validated):
 
 class DateField(StrNumField):
     _RE = re.compile(r"\d{2}\.\d{2}\.\d{4}")
+
     def validate(self, instance, value):
         super(DateField, self).validate(instance, value)
         if nonempty(value):
@@ -114,10 +117,10 @@ class DateField(StrNumField):
 class BirthDayField(DateField):
     # for sure, we are not interested in the precision up to leap year stuff here
     MAX_AGE = timedelta(days=70 * 365.2425)
+
     def validate(self, instance, value):
         super(BirthDayField, self).validate(instance, value)
         dt = datetime.strptime(value, "%d.%m.%Y")
-        # we are 
         if datetime.now() - dt > self.MAX_AGE:
             raise ValueError("wrong date")
 
@@ -140,7 +143,7 @@ class ValidatedRequest(object):
     def __init__(self):
         self._fields = []
         self._invalid_fields = []
-    
+
     @classmethod
     def _find_validated_attrs(_cls):
         res = []
@@ -180,5 +183,3 @@ class ValidatedRequest(object):
 
         if self._invalid_fields:
             raise ValueError("error validating fields")
-
-

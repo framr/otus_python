@@ -4,7 +4,7 @@
 import json
 import datetime
 import logging
-from logging import info, exception
+from logging import info, error, exception
 import hashlib
 import uuid
 from optparse import OptionParser
@@ -56,7 +56,7 @@ class MethodRequest(ValidatedRequest):
         super(MethodRequest, self).__init__()
         self._request = request
         self._context = context
-    
+
     def parse_request(self):
         super(MethodRequest, self).parse_request(self._request)
 
@@ -97,10 +97,10 @@ class OnlineScoreRequest(ValidatedRequest):
         self._context = context
 
     def parse_request(self):
-        super(OnlineScoreRequest, self).parse_request(self._method_req.arguments)                 
+        super(OnlineScoreRequest, self).parse_request(self._method_req.arguments)
         if not ((nonempty(self.phone) and nonempty(self.email)
-            or (nonempty(self.first_name) and nonempty(self.last_name))
-            or (nonempty(self.gender) and nonempty(self.birthday)))):
+                or (nonempty(self.first_name) and nonempty(self.last_name))
+                or (nonempty(self.gender) and nonempty(self.birthday)))):
             raise ValueError("required fields not set")
 
     @property
@@ -123,7 +123,7 @@ def check_auth(request):
     if request.login == ADMIN_LOGIN:
         digest = hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).hexdigest()
     else:
-        digest = hashlib.sha512(request.account + request.login + SALT).hexdigest()        
+        digest = hashlib.sha512(request.account + request.login + SALT).hexdigest()
     if digest.decode(encoding="utf-8") == request.token:
         return True
     return False
@@ -144,7 +144,7 @@ def method_handler(request, ctx, store):
         return method_req.validate_message, INVALID_REQUEST
     if not check_auth(method_req):
         exception("wrong request format")
-        return ERRORS[FORBIDDEN], FORBIDDEN 
+        return ERRORS[FORBIDDEN], FORBIDDEN
 
     if method_req.method == u"online_score":
         info("online_score method called")
@@ -159,7 +159,7 @@ def method_handler(request, ctx, store):
         handler.parse_request()
         handler.process()
     except ValueError:
-        exception("wrong request format") 
+        exception("wrong request format")
         return handler.validate_message, INVALID_REQUEST
 
     res = json.dumps(handler.process())
