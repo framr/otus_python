@@ -1,0 +1,2 @@
+curl -X POST -H "Content-Type: application/json" -d '{"account": "horns&hoofs", "login": "admin", "method": "clients_interests", "token": "60e48bd3a5fa83c4aa3c3ead41419329138ecede30e6af018a491e1fa57b98a3091f87e37184fbd62281156798c994cdaf39d668c367905361dffd8872a973b9", "arguments": {"client_ids": [1,2,3,4], "date": "20.07.2017"}}' http://127.0.0.1:8080/method/
+
