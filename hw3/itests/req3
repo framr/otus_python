@@ -1,0 +1,4 @@
+# to get admin token:
+# >>> import hashlib; import datetime; print hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") + "42").hexdigest()
+curl -X POST -H "Content-Type: application/json" -d '{"account": "horns&hoofs", "login": "admin", "method": "online_score", "token": "7ad9da6442c0b3eeca5a5f4efdf7b16f9eb54954a1eb3c9bffdbe95dbccbd6c1be581c08b3291c430e316cb5a516c87635a6da669b5c66dd5ed7a75e8c73dc87", "arguments": {"phone": "79175002040", "email": "stupnikov@otus.ru", "first_name": "Стансилав", "last_name": "Ступников", "birthday": "01.01.1990", "gender": 1}}' http://127.0.0.1:8080/method/
+
