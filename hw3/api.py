@@ -4,14 +4,14 @@
 import json
 import datetime
 import logging
-from logging import info, error, exception
+from logging import error, exception
 import hashlib
 import uuid
 from optparse import OptionParser
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 
 from model_v1 import CharField, ArgumentsField, EmailField, PhoneField, DateField, BirthDayField, GenderField,\
-        ClientIDsField, ValidatedRequest, nonempty
+        ClientIDsField, ValidatedRequest
 from scoring import get_score, get_interests
 
 
@@ -41,6 +41,78 @@ GENDERS = {
 }
 
 
+class MethodRequest(ValidatedRequest):
+    account = CharField(required=False, nullable=True)
+    login = CharField(required=True, nullable=True)
+    token = CharField(required=True, nullable=True)
+    arguments = ArgumentsField(required=True, nullable=True)
+    method = CharField(required=True, nullable=False)
+
+    @property
+    def is_admin(self):
+        return self.login == ADMIN_LOGIN
+
+    def __init__(self, request, context, store):
+        super(MethodRequest, self).__init__()
+        self._request = request
+        self._context = context
+
+
+class ClientsInterestsRequest(ValidatedRequest):
+    client_ids = ClientIDsField(required=True, nullable=False)
+    date = DateField(required=False, nullable=True)
+
+    def __init__(self, method_req, context, store):
+        super(ClientsInterestsRequest, self).__init__()
+        self._method_req = method_req
+        self._store = store
+        self._context = context
+
+    def process(self):
+        self._context.update({"has": len(self.client_ids)})
+        res = {}
+        for cid in self.client_ids:
+            res[str(cid)] = get_interests(self._store, cid)
+        return res
+
+
+class OnlineScoreRequest(ValidatedRequest):
+    first_name = CharField(required=False, nullable=True)
+    last_name = CharField(required=False, nullable=True)
+    email = EmailField(required=False, nullable=True)
+    phone = PhoneField(required=False, nullable=True)
+    birthday = BirthDayField(required=False, nullable=True)
+    gender = GenderField(required=False, nullable=True)
+
+    def __init__(self, method_req, context, store):
+        super(OnlineScoreRequest, self).__init__()
+        self._method_req = method_req
+        self._store = store
+        self._context = context
+
+    def parse_request(self):
+        super(OnlineScoreRequest, self).parse_request(self._method_req.arguments)
+
+        valid = any(["phone" in self.set_fields and "email" in self.set_fields,
+                     "first_name" in self.set_fields and "last_name" in self.set_fields,
+                     "gender" in self.set_fields and "birthday" in self.set_fields])
+        if not valid:
+            self.invalid_fields["combo"] = ("at least one of pairs (phone, email), (first name, last name), "
+                                            "(gender, birhday) should be set")
+
+    @property
+    def validate_message(self):
+        return " ".join(["%s: %s" % (f, msg) for f, msg in self.invalid_fields.iteritems()])
+
+    def process(self):
+        self._context.update({"has": self.fields})
+        if self._method_req.is_admin:
+            return {"score": 42}
+        score = get_score(self._store, self.phone, self.email, birthday=self.birthday, gender=self.gender,
+                          first_name=self.first_name, last_name=self.last_name)
+        return {"score": score}
+
+
 def check_auth(request):
     if request.login == ADMIN_LOGIN:
         digest = hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).hexdigest()
@@ -51,32 +123,25 @@ def check_auth(request):
     return False
 
 
-def method_handler(request, ctx, store):
-    """
-    1 - create MethodRequest and validate request
-    2 - check auth
-    3 - create and validate Request class for specific request type
-    """
+METHOD_ROUTING = {
+        u"online_score": OnlineScoreRequest,
+        u"clients_interests": ClientsInterestsRequest
+    }
 
+
+def method_handler(request, ctx, store):
     method_req = MethodRequest(request["body"], ctx, store)
-    try:
-        method_req.parse_request()
-    except ValueError:
-        exception("got error while parsing request")
+    method_req.parse_request()
+    if not method_req.valid:
         return method_req.validate_message, INVALID_REQUEST
     if not check_auth(method_req):
         exception("wrong request format")
         return ERRORS[FORBIDDEN], FORBIDDEN
 
-    if method_req.method == u"online_score":
-        info("online_score method called")
-        handler = OnlineScoreRequest(method_req, ctx, store)
-    elif method_req.method == u"clients_interests":
-        handler = ClientsInterestsRequest(method_req, ctx, store)
-        info("online_score method called")
-    else:
+    if method_req.method not in METHOD_ROUTING:
         error("wrong method %s" % method_req.method)
         return "wrong method %s" % method_req.method, INVALID_REQUEST
+    handler = METHOD_ROUTING[method_req](method_req, ctx, store)
     try:
         handler.parse_request()
         handler.process()

@@ -10,6 +10,8 @@ from abc import ABCMeta, abstractmethod
 
 
 EMPTY_VALUES = (None, "", u"", [], (), {})
+
+
 def empty(val):
     return val in EMPTY_VALUES
 
@@ -46,7 +48,6 @@ class ValidatedField(AutoStorage):
         self.validate(instance, value)
         super(ValidatedField, self).__set__(instance, value)
 
-    
     @abstractmethod
     def validate(self, instance, value):
         pass
@@ -179,83 +180,8 @@ class ValidatedRequest(object):
             else:
                 # currently we simply ignore empty fields
                 try:
-                    setattr(self, field, val)
+                    setattr(self, field, data[field])
                 except ValueError as e:
                     self._invalid_fields[field] = e.message
                 else:
                     self._set_fields.append(field)
-
-
-class MethodRequest(ValidatedRequest):
-    account = CharField(required=False, nullable=True)
-    login = CharField(required=True, nullable=True)
-    token = CharField(required=True, nullable=True)
-    arguments = ArgumentsField(required=True, nullable=True)
-    method = CharField(required=True, nullable=False)
-
-    @property
-    def is_admin(self):
-        return self.login == ADMIN_LOGIN
-
-    def __init__(self, request, context, store):
-        super(MethodRequest, self).__init__()
-        self._request = request
-        self._context = context
-
-
-class ClientsInterestsRequest(ValidatedRequest):
-    client_ids = ClientIDsField(required=True, nullable=False)
-    date = DateField(required=False, nullable=True)
-
-    def __init__(self, method_req, context, store):
-        super(ClientsInterestsRequest, self).__init__()
-        self._method_req = method_req
-        self._store = store
-        self._context = context
-
-    def process(self):
-        self._context.update({"has": len(self.client_ids)})
-        res = {}
-        for cid in self.client_ids:
-            res[str(cid)] = get_interests(self._store, cid)
-        return res
-
-
-class OnlineScoreRequest(ValidatedFieldRequest):
-    first_name = CharField(required=False, nullable=True)
-    last_name = CharField(required=False, nullable=True)
-    email = EmailField(required=False, nullable=True)
-    phone = PhoneField(required=False, nullable=True)
-    birthday = BirthDayField(required=False, nullable=True)
-    gender = GenderField(required=False, nullable=True)
-
-    def __init__(self, method_req, context, store):
-        super(OnlineScoreRequest, self).__init__()
-        self._method_req = method_req
-        self._store = store
-        self._context = context
-
-    def parse_request(self):
-        super(OnlineScoreRequest, self).parse_request(self._method_req.arguments)
-
-        valid = any(["phone" in self.set_fields and "email" in self.set_fields,
-                     "first_name" in self.set_fields and "last_name" in self.set_fields,
-                     "gender" in self.set_fields and "birthday" in self.set_fields])
-        if not valid:
-            self.invalid_fields["combo"] = ("at least one of pairs (phone, email), (first name, last name), "
-                                           "(gender, birhday) should be set")
-
-    @property
-    def validate_message(self):
-        return " ".join(["%s: %s" % (f, msg) for f, msg in self.invalid_fields.iteritems()])
-        
-    def process(self):
-        self._context.update({"has": self.fields})
-        if self._method_req.is_admin:
-            return {"score": 42}
-        score = get_score(self._store, self.phone, self.email, birthday=self.birthday, gender=self.gender,
-                          first_name=self.first_name, last_name=self.last_name)
-        return {"score": score}
-
-
-
