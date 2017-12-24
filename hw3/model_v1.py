@@ -5,12 +5,13 @@ Autostorage/ValidatedField recipe is from Fluent Python by Luciano Ramalho (ch. 
 
 import re
 import numbers
-import inspect
 from datetime import datetime, timedelta
-from logging import exception
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 
-MISSING_FIELD = type("MissingField", (), {})()
+
+EMPTY_VALUES = (None, "", u"", [], (), {})
+def empty(val):
+    return val in EMPTY_VALUES
 
 
 class AutoStorage(object):
@@ -35,7 +36,7 @@ class AutoStorage(object):
 
 class ValidatedField(AutoStorage):
     __metaclass__ = ABCMeta
-    
+
     def __init__(self, required=False, nullable=True):
         super(ValidatedField, self).__init__()
         self.required = required
@@ -45,10 +46,11 @@ class ValidatedField(AutoStorage):
         self.validate(instance, value)
         super(ValidatedField, self).__set__(instance, value)
 
+    
     @abstractmethod
     def validate(self, instance, value):
         pass
-        
+
 
 class CharField(ValidatedField):
     def validate(self, instance, value):
@@ -117,14 +119,14 @@ class ClientIDsField(ValidatedField):
 
 class ValidatedRequestMeta(type):
     def __init__(cls, name, bases, attr_dict):
-        super(ValidatedRequestMeta, cls).__init__(cls, name, bases, attr_dict):
+        super(ValidatedRequestMeta, cls).__init__(cls, name, bases, attr_dict)
         _fields = []
         _required = set()
         _nullable = set()
         for key, attr in attr_dict.iteritems():
             if isinstance(attr, ValidatedField):
                 type_name = type(attr).__name__
-                attr.storage_name = "_{}#{}".format(type_name, key) # prettify automatic names
+                attr.storage_name = "_{}#{}".format(type_name, key)  # prettify automatic names
                 _fields.append(key)
                 if attr.required:
                     _required.add(key)
@@ -136,10 +138,11 @@ class ValidatedRequestMeta(type):
 
 
 class ValidatedRequest(object):
-    __metaclass__ = ValidatedRequestMeta 
+    __metaclass__ = ValidatedRequestMeta
 
     def __init__(self):
         self._invalid_fields = {}
+        self._set_fields = []
 
     @property
     def invalid_fields(self):
@@ -150,25 +153,19 @@ class ValidatedRequest(object):
         return self._fields
 
     @property
+    def valid(self):
+        return not self.invalid_fields
+
+    @property
+    def set_fields(self):
+        return self._set_fields
+
+    @property
     def validate_message(self):
         if self._invalid_fields:
             return "invalid fields %s" % ",".join(self._invalid_fields)
         else:
             return "fields OK"
-
-    @staticmethod
-    def empty(value):
-        if val is None or (isinstance(val, unicode) and not val):
-            return True
-        return False
-
-    """
-    @staticmethod
-    def defined(val):
-        if val is None or val is MISSING_FIELD:
-            return False
-        return True
-    """
 
     def parse_request(self, data):
         for field in self._fields:
@@ -176,13 +173,17 @@ class ValidatedRequest(object):
                 if field in self._required:
                     self._invalid_fields[field] = "Required field mising"
                 continue
-            if self.empty(field):
+            if empty(field):
                 if field not in self._nullable:
                     self._invalid_fields[field] = "Non-nullable field is empty"
-            try:
-                setattr(self, field, val)
-            except ValueError:
-                self._invalid_fields[field] = "Malformed field"
+            else:
+                # currently we simply ignore empty fields
+                try:
+                    setattr(self, field, val)
+                except ValueError as e:
+                    self._invalid_fields[field] = e.message
+                else:
+                    self._set_fields.append(field)
 
 
 class MethodRequest(ValidatedRequest):
@@ -201,9 +202,6 @@ class MethodRequest(ValidatedRequest):
         self._request = request
         self._context = context
 
-    def parse_request(self):
-        super(MethodRequest, self).parse_request(self._request)
-
 
 class ClientsInterestsRequest(ValidatedRequest):
     client_ids = ClientIDsField(required=True, nullable=False)
@@ -214,9 +212,6 @@ class ClientsInterestsRequest(ValidatedRequest):
         self._method_req = method_req
         self._store = store
         self._context = context
-
-    def parse_request(self):
-        super(ClientsInterestsRequest, self).parse_request(self._method_req.arguments)
 
     def process(self):
         self._context.update({"has": len(self.client_ids)})
@@ -242,18 +237,18 @@ class OnlineScoreRequest(ValidatedFieldRequest):
 
     def parse_request(self):
         super(OnlineScoreRequest, self).parse_request(self._method_req.arguments)
-        if not ((nonempty(self.phone) and nonempty(self.email)
-                or (nonempty(self.first_name) and nonempty(self.last_name))
-                or (nonempty(self.gender) and nonempty(self.birthday)))):
-            raise ValueError("required fields not set")
+
+        valid = any(["phone" in self.set_fields and "email" in self.set_fields,
+                     "first_name" in self.set_fields and "last_name" in self.set_fields,
+                     "gender" in self.set_fields and "birthday" in self.set_fields])
+        if not valid:
+            self.invalid_fields["combo"] = ("at least one of pairs (phone, email), (first name, last name), "
+                                           "(gender, birhday) should be set")
 
     @property
     def validate_message(self):
-        if self._invalid_fields:
-            return "invalid fields %s" % ",".join(self._invalid_fields)
-        else:
-            return "at least one of pairs (phone, email), (first name, last name), (gender, birhday) should be set"
-
+        return " ".join(["%s: %s" % (f, msg) for f, msg in self.invalid_fields.iteritems()])
+        
     def process(self):
         self._context.update({"has": self.fields})
         if self._method_req.is_admin:
