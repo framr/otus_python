@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Autostorage/Validated recipe is from Fluent Python by Luciano Ramalho (ch. 20, example 20-6)
+Autostorage/ValidatedField recipe is from Fluent Python by Luciano Ramalho (ch. 20, example 20-6)
 """
 
 import re
@@ -8,24 +8,9 @@ import numbers
 import inspect
 from datetime import datetime, timedelta
 from logging import exception
+from abc import ABCMeta
 
 MISSING_FIELD = type("MissingField", (), {})()
-
-
-def nonempty(val):
-    if val is None or (isinstance(val, unicode) and not val):
-        return False
-    return True
-
-
-def defined(val):
-    if val is None or val is MISSING_FIELD:
-        return False
-    return True
-
-
-def missing(val):
-    return val is MISSING_FIELD
 
 
 class AutoStorage(object):
@@ -42,36 +27,32 @@ class AutoStorage(object):
         if instance is None:
             return self
         else:
-            return getattr(instance, self.storage_name)
+            return getattr(instance, self.storage_name, None)
 
     def __set__(self, instance, value):
         setattr(instance, self.storage_name, value)
 
 
-class Validated(AutoStorage):
+class ValidatedField(AutoStorage):
+    __metaclass__ = ABCMeta
+    
     def __init__(self, required=False, nullable=True):
-        super(Validated, self).__init__()
-        self._required = required
-        self._nullable = nullable
+        super(ValidatedField, self).__init__()
+        self.required = required
+        self.nullable = nullable
 
     def __set__(self, instance, value):
         self.validate(instance, value)
-        if value is MISSING_FIELD:
-            value = None
-        super(Validated, self).__set__(instance, value)
+        super(ValidatedField, self).__set__(instance, value)
 
+    @abstractmethod
     def validate(self, instance, value):
-        if self._required and missing(value):
-            raise ValueError("attribute is mandatory")
-        if not self._nullable:
-            if not nonempty(value):
-                raise ValueError("attribute is not nullable")
+        pass
+        
 
-
-class CharField(Validated):
+class CharField(ValidatedField):
     def validate(self, instance, value):
-        super(CharField, self).validate(instance, value)
-        if defined(value) and not isinstance(value, unicode):
+        if not isinstance(value, unicode):
             raise ValueError("attribute should be unicode, while it is of type %s" % type(value))
 
 
@@ -79,27 +60,25 @@ class StrNumField(CharField):
     pass
 
 
-class ArgumentsField(Validated):
+class ArgumentsField(ValidatedField):
     def validate(self, instance, value):
-        super(ArgumentsField, self).validate(instance, value)
-        if defined(value) and not isinstance(value, dict):
+        if not isinstance(value, dict):
             raise ValueError("arguments field should be dict")
 
 
 class EmailField(CharField):
     def validate(self, instance, value):
         super(EmailField, self).validate(instance, value)
-        if nonempty(value) and "@" not in value:
+        if "@" not in value:
             raise ValueError("not a valid email address")
 
 
-class PhoneField(Validated):
+class PhoneField(ValidatedField):
     def validate(self, instance, value):
         super(PhoneField, self).validate(instance, value)
-        if nonempty(value):
-            value = unicode(value) if isinstance(value, numbers.Integral) else value
-            if not isinstance(value, unicode) or len(value) != 11 or not value.startswith("7") or not value.isdigit():
-                raise ValueError("not a valid phone")
+        value = unicode(value) if isinstance(value, numbers.Integral) else value
+        if not isinstance(value, unicode) or len(value) != 11 or not value.startswith("7") or not value.isdigit():
+            raise ValueError("not a valid phone")
 
 
 class DateField(StrNumField):
@@ -107,11 +86,10 @@ class DateField(StrNumField):
 
     def validate(self, instance, value):
         super(DateField, self).validate(instance, value)
-        if nonempty(value):
-            if not self._RE.match(value):
-                raise ValueError("wrong date format")
+        if not self._RE.match(value):
+            raise ValueError("wrong date format")
             # check stuff with correct months/dates/etc via instantiating datetime
-            dt = datetime.strptime(value, "%d.%m.%Y")
+        dt = datetime.strptime(value, "%d.%m.%Y")
 
 
 class BirthDayField(DateField):
@@ -125,33 +103,43 @@ class BirthDayField(DateField):
             raise ValueError("wrong date")
 
 
-class GenderField(Validated):
+class GenderField(ValidatedField):
     def validate(self, instance, value):
-        super(GenderField, self).validate(instance, value)
-        if defined(value) and value not in (0, 1, 2):
+        if value not in (0, 1, 2):
             raise ValueError("malformed gender field")
 
 
-class ClientIDsField(Validated):
+class ClientIDsField(ValidatedField):
     def validate(self, instance, value):
-        super(ClientIDsField, self).validate(instance, value)
-        if defined(value) and (not isinstance(value, list) or not all([isinstance(val, numbers.Integral) for val in value])):
+        if not isinstance(value, list) or not all([isinstance(val, numbers.Integral) for val in value]):
             raise ValueError("wrong client ids")
 
 
-class ValidatedRequest(object):
-    def __init__(self):
-        self._fields = []
-        self._invalid_fields = []
+class ValidatedRequestMeta(type):
+    def __init__(cls, name, bases, attr_dict):
+        super(ValidatedRequestMeta, cls).__init__(cls, name, bases, attr_dict):
+        _fields = []
+        _required = set()
+        _nullable = set()
+        for key, attr in attr_dict.iteritems():
+            if isinstance(attr, ValidatedField):
+                type_name = type(attr).__name__
+                attr.storage_name = "_{}#{}".format(type_name, key) # prettify automatic names
+                _fields.append(key)
+                if attr.required:
+                    _required.add(key)
+                if attr.nullable:
+                    _nullable.add(key)
+        setattr(cls, "_fields", _fields)
+        setattr(cls, "_required", _required)
+        setattr(cls, "_nullable", _nullable)
 
-    @classmethod
-    def _find_validated_attrs(_cls):
-        res = []
-        for klass in inspect.getmro(_cls):
-            for key, attr in klass.__dict__.iteritems():
-                if isinstance(attr, Validated):
-                    res.append(key)
-        return res
+
+class ValidatedRequest(object):
+    __metaclass__ = ValidatedRequestMeta 
+
+    def __init__(self):
+        self._invalid_fields = {}
 
     @property
     def invalid_fields(self):
@@ -168,18 +156,111 @@ class ValidatedRequest(object):
         else:
             return "fields OK"
 
-    def parse_request(self, data):
-        self._invalid_field = []
-        self._fields = []
-        for field in self.__class__._find_validated_attrs():
-            try:
-                val = data.get(field, MISSING_FIELD)
-                setattr(self, field, val)
-                if val is not MISSING_FIELD:
-                    self._fields.append(field)
-            except ValueError:
-                exception("error setting attr %s" % field)
-                self._invalid_fields.append(field)
+    @staticmethod
+    def empty(value):
+        if val is None or (isinstance(val, unicode) and not val):
+            return True
+        return False
 
+    """
+    @staticmethod
+    def defined(val):
+        if val is None or val is MISSING_FIELD:
+            return False
+        return True
+    """
+
+    def parse_request(self, data):
+        for field in self._fields:
+            if field not in data:
+                if field in self._required:
+                    self._invalid_fields[field] = "Required field mising"
+                continue
+            if self.empty(field):
+                if field not in self._nullable:
+                    self._invalid_fields[field] = "Non-nullable field is empty"
+            try:
+                setattr(self, field, val)
+            except ValueError:
+                self._invalid_fields[field] = "Malformed field"
+
+
+class MethodRequest(ValidatedRequest):
+    account = CharField(required=False, nullable=True)
+    login = CharField(required=True, nullable=True)
+    token = CharField(required=True, nullable=True)
+    arguments = ArgumentsField(required=True, nullable=True)
+    method = CharField(required=True, nullable=False)
+
+    @property
+    def is_admin(self):
+        return self.login == ADMIN_LOGIN
+
+    def __init__(self, request, context, store):
+        super(MethodRequest, self).__init__()
+        self._request = request
+        self._context = context
+
+    def parse_request(self):
+        super(MethodRequest, self).parse_request(self._request)
+
+
+class ClientsInterestsRequest(ValidatedRequest):
+    client_ids = ClientIDsField(required=True, nullable=False)
+    date = DateField(required=False, nullable=True)
+
+    def __init__(self, method_req, context, store):
+        super(ClientsInterestsRequest, self).__init__()
+        self._method_req = method_req
+        self._store = store
+        self._context = context
+
+    def parse_request(self):
+        super(ClientsInterestsRequest, self).parse_request(self._method_req.arguments)
+
+    def process(self):
+        self._context.update({"has": len(self.client_ids)})
+        res = {}
+        for cid in self.client_ids:
+            res[str(cid)] = get_interests(self._store, cid)
+        return res
+
+
+class OnlineScoreRequest(ValidatedFieldRequest):
+    first_name = CharField(required=False, nullable=True)
+    last_name = CharField(required=False, nullable=True)
+    email = EmailField(required=False, nullable=True)
+    phone = PhoneField(required=False, nullable=True)
+    birthday = BirthDayField(required=False, nullable=True)
+    gender = GenderField(required=False, nullable=True)
+
+    def __init__(self, method_req, context, store):
+        super(OnlineScoreRequest, self).__init__()
+        self._method_req = method_req
+        self._store = store
+        self._context = context
+
+    def parse_request(self):
+        super(OnlineScoreRequest, self).parse_request(self._method_req.arguments)
+        if not ((nonempty(self.phone) and nonempty(self.email)
+                or (nonempty(self.first_name) and nonempty(self.last_name))
+                or (nonempty(self.gender) and nonempty(self.birthday)))):
+            raise ValueError("required fields not set")
+
+    @property
+    def validate_message(self):
         if self._invalid_fields:
-            raise ValueError("error validating fields")
+            return "invalid fields %s" % ",".join(self._invalid_fields)
+        else:
+            return "at least one of pairs (phone, email), (first name, last name), (gender, birhday) should be set"
+
+    def process(self):
+        self._context.update({"has": self.fields})
+        if self._method_req.is_admin:
+            return {"score": 42}
+        score = get_score(self._store, self.phone, self.email, birthday=self.birthday, gender=self.gender,
+                          first_name=self.first_name, last_name=self.last_name)
+        return {"score": score}
+
+
+
