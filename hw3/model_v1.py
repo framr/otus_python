@@ -166,22 +166,11 @@ class ValidatedRequest(object):
     def validate_message(self):
         return "; ".join(["%s: %s" % (f, msg) for f, msg in self.invalid_fields.iteritems()])
 
-    """
-    @property
-    def validate_message(self):
-        if self._invalid_fields:
-            return "invalid fields %s" % ",".join(self._invalid_fields)
-        else:
-            return "fields OK"
-    """
-
     @property
     def data(self):
         return self._request
 
     def parse_request(self):
-        #print "=" * 80
-        #print self._fields, data
         for field in self._fields:
             if field not in self.data:
                 if field in self._required:
