@@ -55,7 +55,7 @@ class ValidatedField(AutoStorage):
 
 class CharField(ValidatedField):
     def validate(self, instance, value):
-        if not isinstance(value, unicode):
+        if not isinstance(value, unicode) :
             raise ValueError("attribute should be unicode, while it is of type %s" % type(value))
 
 
@@ -120,7 +120,7 @@ class ClientIDsField(ValidatedField):
 
 class ValidatedRequestMeta(type):
     def __init__(cls, name, bases, attr_dict):
-        super(ValidatedRequestMeta, cls).__init__(cls, name, bases, attr_dict)
+        super(ValidatedRequestMeta, cls).__init__(name, bases, attr_dict)
         _fields = []
         _required = set()
         _nullable = set()
@@ -144,6 +144,7 @@ class ValidatedRequest(object):
     def __init__(self):
         self._invalid_fields = {}
         self._set_fields = []
+        self._request = None
 
     @property
     def invalid_fields(self):
@@ -163,14 +164,26 @@ class ValidatedRequest(object):
 
     @property
     def validate_message(self):
+        return "; ".join(["%s: %s" % (f, msg) for f, msg in self.invalid_fields.iteritems()])
+
+    """
+    @property
+    def validate_message(self):
         if self._invalid_fields:
             return "invalid fields %s" % ",".join(self._invalid_fields)
         else:
             return "fields OK"
+    """
 
-    def parse_request(self, data):
+    @property
+    def data(self):
+        return self._request
+
+    def parse_request(self):
+        #print "=" * 80
+        #print self._fields, data
         for field in self._fields:
-            if field not in data:
+            if field not in self.data:
                 if field in self._required:
                     self._invalid_fields[field] = "Required field mising"
                 continue
@@ -180,7 +193,7 @@ class ValidatedRequest(object):
             else:
                 # currently we simply ignore empty fields
                 try:
-                    setattr(self, field, data[field])
+                    setattr(self, field, self.data[field])
                 except ValueError as e:
                     self._invalid_fields[field] = e.message
                 else:

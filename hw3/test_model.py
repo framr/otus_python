@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from model_v1 import AutoStorage, Validated, CharField, ArgumentsField, EmailField,\
+from model_v1 import AutoStorage, ValidatedField, CharField, ArgumentsField, EmailField,\
         BirthDayField, GenderField, ClientIDsField, PhoneField, DateField, ValidatedRequest
 from api import OnlineScoreRequest, ClientsInterestsRequest
 
@@ -37,7 +37,7 @@ def test_char_field_error_raises(value, req):
         req.char = value
 
 
-@pytest.mark.parametrize("value", ["1", "abc", u"abc", ""])
+@pytest.mark.parametrize("value", [u"1", u"abc", u"abc", u""])
 def test_char_field_valid(value, req):
     req.char = value
     assert req.char == value
@@ -61,7 +61,7 @@ def test_email_field_error_raises(value, req):
         req.email = value
 
 
-@pytest.mark.parametrize("value", [u"@", u"xxx@yyy", u"1@", u"@1", "xxx@yyy"])
+@pytest.mark.parametrize("value", [u"@", u"xxx@yyy", u"1@", u"@1", u"xxx@yyy"])
 def test_email_field_valid(value, req):
     req.email = value
     assert req.email == value
@@ -74,7 +74,7 @@ def test_phone_field_error_raises(value, req):
         req.phone = value
 
 
-@pytest.mark.parametrize("value", [u"79163333333", "79163333333", 79163333333])
+@pytest.mark.parametrize("value", [u"79163333333", u"79163333333", 79163333333])
 def test_phone_field_valid(value, req):
     req.phone = value
     assert req.phone == value
@@ -128,7 +128,7 @@ def test__ids_valid(value, req):
     assert req.ids == value
 
 
-
+"""
 @pytest.fixture()
 def validated_req():
     class T(ValidatedRequest):
@@ -143,7 +143,4 @@ def validated_req():
 
 def test_validated_request():
     pass
-
-       
-
-
+"""

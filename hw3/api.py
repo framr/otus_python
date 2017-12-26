@@ -68,6 +68,10 @@ class ClientsInterestsRequest(ValidatedRequest):
         self._store = store
         self._context = context
 
+    @property
+    def data(self):
+        return self._method_req.arguments
+
     def process(self):
         self._context.update({"has": len(self.client_ids)})
         res = {}
@@ -90,19 +94,18 @@ class OnlineScoreRequest(ValidatedRequest):
         self._store = store
         self._context = context
 
-    def parse_request(self):
-        super(OnlineScoreRequest, self).parse_request(self._method_req.arguments)
+    @property
+    def data(self):
+        return self._method_req.arguments
 
+    def parse_request(self):
+        super(OnlineScoreRequest, self).parse_request()
         valid = any(["phone" in self.set_fields and "email" in self.set_fields,
                      "first_name" in self.set_fields and "last_name" in self.set_fields,
                      "gender" in self.set_fields and "birthday" in self.set_fields])
         if not valid:
             self.invalid_fields["combo"] = ("at least one of pairs (phone, email), (first name, last name), "
                                             "(gender, birhday) should be set")
-
-    @property
-    def validate_message(self):
-        return " ".join(["%s: %s" % (f, msg) for f, msg in self.invalid_fields.iteritems()])
 
     def process(self):
         self._context.update({"has": self.fields})
@@ -141,7 +144,7 @@ def method_handler(request, ctx, store):
     if method_req.method not in METHOD_ROUTING:
         error("wrong method %s" % method_req.method)
         return "wrong method %s" % method_req.method, INVALID_REQUEST
-    handler = METHOD_ROUTING[method_req](method_req, ctx, store)
+    handler = METHOD_ROUTING[method_req.method](method_req, ctx, store)
     try:
         handler.parse_request()
         handler.process()
