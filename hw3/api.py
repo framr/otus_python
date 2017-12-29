@@ -13,7 +13,7 @@ from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from model_v1 import CharField, ArgumentsField, EmailField, PhoneField, DateField, BirthDayField, GenderField,\
         ClientIDsField, ValidatedRequest
 from scoring import get_score, get_interests
-
+from kvstore import ZMQKVClient
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -156,11 +156,15 @@ def method_handler(request, ctx, store):
     return res, OK
 
 
+def get_store():
+    return ZMQKVClient()
+
+
 class MainHTTPHandler(BaseHTTPRequestHandler):
     router = {
         "method": method_handler
     }
-    store = None
+    store = get_store()
 
     def get_request_id(self, headers):
         return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)
