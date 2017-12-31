@@ -13,7 +13,7 @@ EMPTY_VALUES = (None, "", u"", [], (), {})
 
 
 def empty(val):
-    return val in EMPTY_VALUES
+    return any([val == ev for ev in EMPTY_VALUES])
 
 
 class AutoStorage(object):
@@ -55,7 +55,7 @@ class ValidatedField(AutoStorage):
 
 class CharField(ValidatedField):
     def validate(self, instance, value):
-        if not isinstance(value, unicode) :
+        if not isinstance(value, unicode):
             raise ValueError("attribute should be unicode, while it is of type %s" % type(value))
 
 
@@ -163,20 +163,23 @@ class ValidatedRequest(object):
         return self._set_fields
 
     @property
+    def data(self):
+        """
+        property for retrieving request data
+        """
+        raise NotImplementedError
+
+    @property
     def validate_message(self):
         return "; ".join(["%s: %s" % (f, msg) for f, msg in self.invalid_fields.iteritems()])
 
-    @property
-    def data(self):
-        return self._request
-
     def parse_request(self):
-        for field in self._fields:
+        for field in self.fields:
             if field not in self.data:
                 if field in self._required:
                     self._invalid_fields[field] = "Required field mising"
                 continue
-            if empty(field):
+            if empty(self.data.get(field, None)):
                 if field not in self._nullable:
                     self._invalid_fields[field] = "Non-nullable field is empty"
             else:

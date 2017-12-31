@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import pytest
 import api
+from api import ClientsInterestsRequest, MethodRequest, OnlineScoreRequest
 import hashlib
 from datetime import datetime
 
@@ -8,6 +9,28 @@ SALT = "Otus"
 ADMIN_LOGIN = "admin"
 ADMIN_SALT = "42"
 
+
+######### Test Requests classes
+
+@pytest.mark.parametrize("arguments", [{}, {"client_ids": []}])
+def test_invalid_clients_interests_empty_fields(arguments):
+    meth_req = type("MethodRequest", (object,), {"arguments": arguments})()
+    interests = ClientsInterestsRequest(meth_req, {}, {})
+    interests.parse_request()
+    assert not interests.valid
+
+@pytest.mark.parametrize("arguments", [
+    {}, {"first_name": u"Hahn"}, {"last_name": u"Banach"}, {"phone": u"73332222", "first_name": u"Hahn", "gender": 0},
+    {"last_name": u"Banach", "email": u"iamhahn@banach.com", "birthday": u"01.01.2018"}
+    ])
+def test_incomplete_online_score_fields(arguments):
+    meth_req = type("MethodRequest", (object,), {"arguments": arguments})()
+    interests = OnlineScoreRequest(meth_req, {}, {})
+    interests.parse_request()
+    assert not interests.valid
+
+
+######### Test API
 
 class TestApi(object):
     def __init__(self):
@@ -93,19 +116,29 @@ def test_invalid_method_name(request, test_api):
 
 @pytest.mark.parametrize("arguments", [
     {},
-    {"first_name": 0, "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birhday": u"01.01.2018" , "gender": 0},
-    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birhday": u"01.01.2018" , "gender": 0},
-    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvaderyahoo.com", "birhday": u"01.01.2018" , "gender": 0},
-    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birhday": u"2018.01.01" , "gender": 0},
-    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birhday": u"2018.01.01" , "gender": 1}
+    {"first_name": 0, "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birthday": u"01.01.2018" , "gender": 0},
+    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvaderyahoo.com", "birthday": u"01.01.2018" , "gender": 0},
+    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birthday": u"2018.01.01" , "gender": 0},
+    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birthday": u"01.01.2018" , "gender": 3}
     ])
 def test_invalid_score_request(arguments, test_api):
     request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": arguments, "method": u"online_score"}
     test_api.enforce_valid_token(request)
     msg, code = test_api.get_response(request)
-    #print msg
-    #assert True == False
     assert code == api.INVALID_REQUEST
+
+
+@pytest.mark.parametrize("arguments", [
+    {},
+    {"client_ids": [], "date": u"01.01.2018"}
+    ])
+def test_invalid_clients_interests_request(arguments, test_api):
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": arguments, "method": u"clients_interests"}
+    test_api.enforce_valid_token(request)
+    msg, code = test_api.get_response(request)
+    assert code == api.INVALID_REQUEST
+
+
 
 
 

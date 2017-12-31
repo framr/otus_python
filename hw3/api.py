@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 import json
 import datetime
 import logging
@@ -57,6 +56,10 @@ class MethodRequest(ValidatedRequest):
         self._request = request
         self._context = context
 
+    @property
+    def data(self):
+        return self._request
+
 
 class ClientsInterestsRequest(ValidatedRequest):
     client_ids = ClientIDsField(required=True, nullable=False)
@@ -70,7 +73,7 @@ class ClientsInterestsRequest(ValidatedRequest):
 
     @property
     def data(self):
-        return self._method_req.arguments
+        return self._method_req.arguments or {}
 
     def process(self):
         self._context.update({"has": len(self.client_ids)})
@@ -96,7 +99,7 @@ class OnlineScoreRequest(ValidatedRequest):
 
     @property
     def data(self):
-        return self._method_req.arguments
+        return self._method_req.arguments or {}
 
     def parse_request(self):
         super(OnlineScoreRequest, self).parse_request()
@@ -144,14 +147,10 @@ def method_handler(request, ctx, store):
     if method_req.method not in METHOD_ROUTING:
         error("wrong method %s" % method_req.method)
         return "wrong method %s" % method_req.method, INVALID_REQUEST
-    handler = METHOD_ROUTING[method_req.method](method_req, ctx, store)
-    try:
-        handler.parse_request()
-        handler.process()
-    except ValueError:
-        exception("wrong request format")
+    handler = METHOD_ROUTING[method_req.method](method_req, ctx, store) 
+    handler.parse_request()
+    if not handler.valid:
         return handler.validate_message, INVALID_REQUEST
-
     res = json.dumps(handler.process())
     return res, OK
 
