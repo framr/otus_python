@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 import pytest
-import api
-from api import ClientsInterestsRequest, MethodRequest, OnlineScoreRequest
 import hashlib
 from datetime import datetime
+from scoring import user_key
+import json
+
+import api
+from api import ClientsInterestsRequest, MethodRequest, OnlineScoreRequest
+
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -50,23 +54,10 @@ def test_online_score_fields_ok(arguments):
     print interests.invalid_fields
     assert interests.valid
 
+
 #############################
 ######### Test API ##########
 #############################
-
-
-class MockKVStore(object):
-    def __init__(self):
-        self._cache = {}
-        self._store = {}
-    def cache_set(self, key, value, ttl=None):
-        self._cache[key] = value
-    def cache_get(self, key):
-        return self._cache.get(key, None)
-    def set(self, key, value):
-        self._store[key] = value
-    def get(self, data):
-        return self._store.get(key, None)
 
 
 class TestApi(object):
@@ -181,13 +172,57 @@ def test_invalid_clients_interests_request(arguments, test_api):
     "gender": 0, "phone": u"74993332222"}, {"first_name": u"Hahn", "last_name": u"Banach"},
     {"phone": u"74953332222", "email": u"iamhahn@banach.com"}, {"gender": 2, "birthday": u"01.01.2018"}
     ])
-def test_score_request_ok(monkeypatchm arguments, test_api):
-    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": arguments, "method": u"online_score"}
-
-        
+def test_score_request_ok(arguments, test_api):
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": arguments, "method": u"online_score"}    
     test_api.enforce_valid_token(request)
     msg, code = test_api.get_response(request)
     assert code == api.OK
 
 
+######### Test scoring part of API ##########
+
+# return score from KVStore cache
+# return score when KVStore is not available
+# return score when KVStore cache timed out. This required service running?
+
+class MockKVStore(object):
+    def __init__(self, got_error=False):
+        self._cache = {}
+        self._store = {}
+        self._got_error = got_error
+    def cache_set(self, key, value, ttl=None):
+        self._cache[key] = value
+    def cache_get(self, key):
+        return self._cache.get(key, None)
+    def set(self, key, value):
+        self._store[key] = value
+    def get(self, data):
+        return self._store.get(key, None)
+
+
+@pytest.fixture()
+def kvstore():
+    return MockKVStore()
+
+
+@pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
+def test_return_score_from_store_cache(score, kvstore, test_api):
+    args = {"first_name": u"Darth", "last_name": u"Vader"}
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}    
+    key = user_key(first_name=args["first_name"], last_name=args["last_name"])
+    kvstore.cache_set(key, score)
+    test_api.enforce_valid_token(request)
+    res, _ = test_api.get_response(request, store=kvstore)
+    assert json.loads(res) == {"score": score}
+
+
+@pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
+def test_return_score_kvstore_unavailable(score, kvstore, test_api):
+    args = {"first_name": u"Darth", "last_name": u"Vader"}
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}    
+    key = user_key(first_name=args["first_name"], last_name=args["last_name"])
+    kvstore.cache_set(key, score)
+    test_api.enforce_valid_token(request)
+    res, _ = test_api.get_response(request, store=kvstore)
+    assert json.loads(res) == {"score": score}
 
