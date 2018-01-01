@@ -10,7 +10,7 @@ ADMIN_LOGIN = "admin"
 ADMIN_SALT = "42"
 
 
-######### Test Requests classes
+######### Test Requests classes ###########
 
 @pytest.mark.parametrize("arguments", [{}, {"client_ids": []}])
 def test_invalid_clients_interests_empty_fields(arguments):
@@ -19,8 +19,17 @@ def test_invalid_clients_interests_empty_fields(arguments):
     interests.parse_request()
     assert not interests.valid
 
+
+@pytest.mark.parametrize("arguments", [{"client_ids": [1, 2]}, {"client_ids": [0, 1], "date": u"01.01.2018"}])
+def test_clients_interests_ok(arguments):
+    meth_req = type("MethodRequest", (object,), {"arguments": arguments})()
+    interests = ClientsInterestsRequest(meth_req, {}, {})
+    interests.parse_request()
+    assert interests.valid
+
+
 @pytest.mark.parametrize("arguments", [
-    {}, {"first_name": u"Hahn"}, {"last_name": u"Banach"}, {"phone": u"73332222", "first_name": u"Hahn", "gender": 0},
+    {}, {"first_name": u"Hahn"}, {"last_name": u"Banach"}, {"phone": u"74953332222", "first_name": u"Hahn", "gender": 0},
     {"last_name": u"Banach", "email": u"iamhahn@banach.com", "birthday": u"01.01.2018"}
     ])
 def test_incomplete_online_score_fields(arguments):
@@ -30,15 +39,43 @@ def test_incomplete_online_score_fields(arguments):
     assert not interests.valid
 
 
-######### Test API
+@pytest.mark.parametrize("arguments", [
+    {"first_name": u"Hahn", "last_name": u"Banach"}, {"phone": u"74953332222", "email": u"iamhahn@banach.com"},
+    {"birthday": u"01.01.2018", "gender": 0}
+    ])
+def test_online_score_fields_ok(arguments):
+    meth_req = type("MethodRequest", (object,), {"arguments": arguments})()
+    interests = OnlineScoreRequest(meth_req, {}, {})
+    interests.parse_request()
+    print interests.invalid_fields
+    assert interests.valid
+
+#############################
+######### Test API ##########
+#############################
+
+
+class MockKVStore(object):
+    def __init__(self):
+        self._cache = {}
+        self._store = {}
+    def cache_set(self, key, value, ttl=None):
+        self._cache[key] = value
+    def cache_get(self, key):
+        return self._cache.get(key, None)
+    def set(self, key, value):
+        self._store[key] = value
+    def get(self, data):
+        return self._store.get(key, None)
+
 
 class TestApi(object):
     def __init__(self):
         self.context = {}
         self.headers = {}
-        self.store = None
-    def get_response(self, request):
-        return api.method_handler({"body": request, "headers": self.headers}, self.context, self.store)
+        #self.store = MockKVStore()
+    def get_response(self, request, store=None):
+        return api.method_handler({"body": request, "headers": self.headers}, self.context, store)
     def enforce_valid_token(self, request):
         if request["login"] == ADMIN_LOGIN:
             # XXX: relying on datetime.now() is a bad idea, we should better monkeypatch it 
@@ -139,8 +176,18 @@ def test_invalid_clients_interests_request(arguments, test_api):
     assert code == api.INVALID_REQUEST
 
 
+@pytest.mark.parametrize("arguments", [
+    {"first_name": u"Darth", "last_name": u"Vader", "email": u"iamvader@yahoo.com", "birthday": u"01.01.2018",
+    "gender": 0, "phone": u"74993332222"}, {"first_name": u"Hahn", "last_name": u"Banach"},
+    {"phone": u"74953332222", "email": u"iamhahn@banach.com"}, {"gender": 2, "birthday": u"01.01.2018"}
+    ])
+def test_score_request_ok(monkeypatchm arguments, test_api):
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": arguments, "method": u"online_score"}
 
-
+        
+    test_api.enforce_valid_token(request)
+    msg, code = test_api.get_response(request)
+    assert code == api.OK
 
 
 

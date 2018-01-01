@@ -11,14 +11,19 @@ Record = namedtuple("Record", "value update_time ttl")
 class ZMQKVClient(object):
     def __init__(self, addr="tcp://127.0.0.1:42420"):
         self._context = zmq.Context()
+        self._addr = addr
+
+    def init_connection(self):
         self._socket = self._context.socket(zmq.REQ)
-        #https://stackoverflow.com/questions/7538988/zeromq-how-to-prevent-infinite-wait
-        self._socket.RCVTIMEO = 30
-        self._socket.SNDTIMEO = 30
-        self._socket.connect(addr)
+        # https://stackoverflow.com/questions/7538988/zeromq-how-to-prevent-infinite-wait
+        self._socket.RCVTIMEO = 30 # XXX: not tested
+        self._socket.SNDTIMEO = 30 # XXX: not tested 
+        self._socket.connect(self._addr)
+        return self
 
     def _get(self, key, cache=False):
         cmd = "get" if not cache else "get_cache"
+        # should we reconnect on error? read zmq docs..
         self._socket.send(pickle.dumps((cmd, key, None)))
         data = pickle.loads(self._socket.recv()) or {}
         return Record(data.get("value", None), data.get("update_time", None), data.get("ttl", None))
@@ -77,4 +82,5 @@ class ZMQKVServer(object):
 
 if __name__ == "__main__":
     server = ZMQKVServer()
+    server.init_connection()
     server.run()
