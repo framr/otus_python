@@ -23,13 +23,11 @@ def get_score(store, phone, email, birthday=None, gender=None, first_name=None, 
     cached = None
     try:
         cached = store.cache_get(key)
-        print cached
     except Exception:
-        # XXX: hope rps is not very high (otherwise remove prints?)
         # should we store cache miss ratio?
         exception("cache error")
     score = cached or 0
-    if score: # WTF: score = 0.0 is not allowed?
+    if score: # WTF: score = 0.0 is not a valid score?
         return score
 
     if phone:
@@ -44,12 +42,11 @@ def get_score(store, phone, email, birthday=None, gender=None, first_name=None, 
     try:
         store.cache_set(key, score,  60 * 60)
     except Exception:
-        # XXX: hope rps is not very high (otherwise remove prints?)
         # should we store cache miss ratio?
         exception("cache set error")
     return score
 
 
 def get_interests(store, cid):
-    r = retry_call(store.get, ["i:%s" % cid])
+    r = retry_call(store.get, ["i:%s" % cid], tries=3)
     return json.loads(r) if r else []

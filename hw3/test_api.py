@@ -51,7 +51,6 @@ def test_online_score_fields_ok(arguments):
     meth_req = type("MethodRequest", (object,), {"arguments": arguments})()
     interests = OnlineScoreRequest(meth_req, {}, {})
     interests.parse_request()
-    print interests.invalid_fields
     assert interests.valid
 
 
@@ -66,6 +65,7 @@ class TestApi(object):
         self.headers = {}
         #self.store = MockKVStore()
     def get_response(self, request, store=None):
+        self.context = {}
         return api.method_handler({"body": request, "headers": self.headers}, self.context, store)
     def enforce_valid_token(self, request):
         if request["login"] == ADMIN_LOGIN:
@@ -177,26 +177,22 @@ def test_score_request_ok(arguments, test_api):
     test_api.enforce_valid_token(request)
     msg, code = test_api.get_response(request)
     assert code == api.OK
+    assert sorted(test_api.context["has"]) == sorted(arguments.keys())
 
 
-######### Test scoring part of API ##########
-
-# return score from KVStore cache
-# return score when KVStore is not available
-# return score when KVStore cache timed out. This required service running?
+######### Test API integration with kvstore ##########
 
 class MockKVStore(object):
-    def __init__(self, got_error=False):
+    def __init__(self):
         self._cache = {}
         self._store = {}
-        self._got_error = got_error
     def cache_set(self, key, value, ttl=None):
         self._cache[key] = value
     def cache_get(self, key):
         return self._cache.get(key, None)
     def set(self, key, value):
         self._store[key] = value
-    def get(self, data):
+    def get(self, key):
         return self._store.get(key, None)
 
 
@@ -204,6 +200,14 @@ class MockKVStore(object):
 def kvstore():
     return MockKVStore()
 
+
+def test_admin_score(request, test_api):
+    request = {"account": u"horns&hoofs", "login": u"admin", "arguments": {"first_name": u"Hahn", "last_name": u"Banach"},
+               "method": u"online_score"}
+    test_api.enforce_valid_token(request)
+    msg, code = test_api.get_response(request)
+    assert json.loads(msg) == {"score": 42}
+ 
 
 @pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
 def test_return_score_from_store_cache(score, kvstore, test_api):
@@ -217,12 +221,46 @@ def test_return_score_from_store_cache(score, kvstore, test_api):
 
 
 @pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
-def test_return_score_kvstore_unavailable(score, kvstore, test_api):
+def test_return_score_cache_unavailable(score, kvstore, test_api):
     args = {"first_name": u"Darth", "last_name": u"Vader"}
     request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}    
     key = user_key(first_name=args["first_name"], last_name=args["last_name"])
-    kvstore.cache_set(key, score)
     test_api.enforce_valid_token(request)
-    res, _ = test_api.get_response(request, store=kvstore)
-    assert json.loads(res) == {"score": score}
+    res, code  = test_api.get_response(request, store=None)
+    assert code == api.OK
+
+
+def test__clients_interests_request_returns_valid_interests(kvstore, test_api): 
+    args = {"client_ids": [1, 2], "date": u"01.01.2018"}
+    def key(cid):
+        return "i:%s" % cid
+    kvstore.set(key(1), json.dumps(("pets", "tv")))
+    kvstore.set(key(2), json.dumps(("travel", "music")))
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"clients_interests"}
+    test_api.enforce_valid_token(request)
+ 
+    msg, code = test_api.get_response(request, store=kvstore)
+    assert json.loads(msg) == {"1": ["pets", "tv"], "2": ["travel", "music"]}
+    
+
+def test__clients_interests_request_ok(kvstore, test_api): 
+    args = {"client_ids": [1, 2], "date": u"01.01.2018"}
+    def key(cid):
+        return "i:%s" % cid
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"clients_interests"}
+    test_api.enforce_valid_token(request)
+    msg, code = test_api.get_response(request, store=kvstore)
+    assert code == api.OK 
+    assert test_api.context == {"nclients": 2}
+
+
+def test__clients_interests_store_unavailable_raises(kvstore, test_api): 
+    args = {"client_ids": [1, 2], "date": u"01.01.2018"}
+    def key(cid):
+        return "i:%s" % cid
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"clients_interests"}
+    test_api.enforce_valid_token(request) 
+    with pytest.raises(Exception):
+        _, _ = test_api.get_response(request, store=None)
+
 

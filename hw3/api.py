@@ -78,7 +78,7 @@ class ClientsInterestsRequest(ValidatedRequest):
         return self._method_req.arguments or {}
 
     def process(self):
-        self._context.update({"has": len(self.client_ids)})
+        self._context.update({"nclients": len(self.client_ids)})
         res = {}
         for cid in self.client_ids:
             res[str(cid)] = get_interests(self._store, cid)
@@ -113,7 +113,7 @@ class OnlineScoreRequest(ValidatedRequest):
                                             "(gender, birhday) should be set")
 
     def process(self):
-        self._context.update({"has": self.fields})
+        self._context.update({"has": self.set_fields})
         if self._method_req.is_admin:
             return {"score": 42}
         score = get_score(self._store, self.phone, self.email, birthday=self.birthday, gender=self.gender,
