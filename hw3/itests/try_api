@@ -1,0 +1,6 @@
+./kvstore_serve&
+sleep 2s
+./insert_data.py
+./api_serve&
+sleep 2s
+./get_data_from_api

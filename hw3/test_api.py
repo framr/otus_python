@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import pytest
 import hashlib
 from datetime import datetime
@@ -221,6 +223,17 @@ def test_return_score_from_store_cache(score, kvstore, test_api):
 
 
 @pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
+def test_return_score_from_store_cache_utf8_rus_name(score, kvstore, test_api):
+    args = {"first_name": u"Дарт", "last_name": u"Вэйдер"}
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}    
+    key = user_key(first_name=args["first_name"], last_name=args["last_name"])
+    kvstore.cache_set(key, score)
+    test_api.enforce_valid_token(request)
+    res, _ = test_api.get_response(request, store=kvstore)
+    assert json.loads(res) == {"score": score}
+
+
+@pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
 def test_return_score_cache_unavailable(score, kvstore, test_api):
     args = {"first_name": u"Darth", "last_name": u"Vader"}
     request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}    
@@ -240,8 +253,37 @@ def test__clients_interests_request_returns_valid_interests(kvstore, test_api):
     test_api.enforce_valid_token(request)
  
     msg, code = test_api.get_response(request, store=kvstore)
-    assert json.loads(msg) == {"1": ["pets", "tv"], "2": ["travel", "music"]}
-    
+    data = json.loads(msg)
+    assert data == {"1": [u"pets", u"tv"], "2": [u"travel", u"music"]}
+
+
+def test__clients_interests_request_returns_valid_interests_utf8_rus_interests(kvstore, test_api): 
+    args = {"client_ids": [1, 2], "date": u"01.01.2018"}
+    def key(cid):
+        return "i:%s" % cid
+    kvstore.set(key(1), json.dumps(("котики", "единороги")))
+    kvstore.set(key(2), json.dumps(("митал", "гитары")))
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"clients_interests"}
+    test_api.enforce_valid_token(request)
+ 
+    msg, code = test_api.get_response(request, store=kvstore)
+    data = json.loads(msg)
+    assert data == {"1": [u"котики", u"единороги"], "2": [u"митал", u"гитары"]}
+
+
+def test__clients_interests_request_returns_valid_interests(kvstore, test_api): 
+    args = {"client_ids": [1, 2], "date": u"01.01.2018"}
+    def key(cid):
+        return "i:%s" % cid
+    kvstore.set(key(1), json.dumps(("pets", "tv")))
+    kvstore.set(key(2), json.dumps(("travel", "music")))
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"clients_interests"}
+    test_api.enforce_valid_token(request)
+ 
+    msg, code = test_api.get_response(request, store=kvstore)
+    data = json.loads(msg)
+    assert data == {"1": [u"pets", u"tv"], "2": [u"travel", u"music"]}
+
 
 def test__clients_interests_request_ok(kvstore, test_api): 
     args = {"client_ids": [1, 2], "date": u"01.01.2018"}

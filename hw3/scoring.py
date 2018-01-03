@@ -5,13 +5,11 @@ from logging import exception
 
 
 def user_key(first_name=None, last_name=None, birthday=None):
-    key_parts = [
-        first_name or "",
-        last_name or "",
-        #birthday.strftime("%Y%m%d") if birthday else "",
-        birthday or ""
-    ]
-    key = "uid:" + hashlib.md5("".join(key_parts)).hexdigest()
+    """
+    input: unicode strings
+    """
+    str_key = "".join([part.encode("utf-8") for part in [first_name, last_name, birthday] if part is not None])
+    key = "uid:" + hashlib.md5(str_key).hexdigest()
     return key
 
 

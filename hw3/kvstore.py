@@ -82,5 +82,4 @@ class ZMQKVServer(object):
 
 if __name__ == "__main__":
     server = ZMQKVServer()
-    server.init_connection()
     server.run()

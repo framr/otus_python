@@ -1,1 +1,6 @@
-See examples of access in req1, req2, req3
+See examples of api access in 
+itests/req*
+itests/try_api
+and supplement scripts
+
+

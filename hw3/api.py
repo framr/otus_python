@@ -158,7 +158,7 @@ def method_handler(request, ctx, store):
 
 
 # XXX: we should better catch only kvstore/network errors here
-@retry(Exception, delay=1, jitter=1)
+@retry(Exception, delay=1, jitter=1, tries=3)
 def get_store():
     return ZMQKVClient().init_connection()
 
