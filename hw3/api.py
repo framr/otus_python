@@ -149,7 +149,7 @@ def method_handler(request, ctx, store):
     if method_req.method not in METHOD_ROUTING:
         error("wrong method %s" % method_req.method)
         return "wrong method %s" % method_req.method, INVALID_REQUEST
-    handler = METHOD_ROUTING[method_req.method](method_req, ctx, store) 
+    handler = METHOD_ROUTING[method_req.method](method_req, ctx, store)
     handler.parse_request()
     if not handler.valid:
         return handler.validate_message, INVALID_REQUEST

@@ -14,10 +14,10 @@ def user_key(first_name=None, last_name=None, birthday=None):
 
 
 def get_score(store, phone, email, birthday=None, gender=None, first_name=None, last_name=None):
-    
+
     key = user_key(first_name=first_name, last_name=last_name, birthday=birthday)
     # try get from cache,
-    # fallback to heavy calculation in case of cache miss 
+    # fallback to heavy calculation in case of cache miss
     cached = None
     try:
         cached = store.cache_get(key)
@@ -25,7 +25,7 @@ def get_score(store, phone, email, birthday=None, gender=None, first_name=None, 
         # should we store cache miss ratio?
         exception("cache error")
     score = cached or 0
-    if score: # WTF: score = 0.0 is not a valid score?
+    if score:  # WTF: score = 0.0 is not a valid score?
         return score
 
     if phone:

@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import zmq
-from datetime import timedelta, datetime
 from collections import namedtuple
 import pickle
+import datetime
 
 Record = namedtuple("Record", "value update_time ttl")
 
@@ -16,8 +16,8 @@ class ZMQKVClient(object):
     def init_connection(self):
         self._socket = self._context.socket(zmq.REQ)
         # https://stackoverflow.com/questions/7538988/zeromq-how-to-prevent-infinite-wait
-        self._socket.RCVTIMEO = 30 # XXX: not tested
-        self._socket.SNDTIMEO = 30 # XXX: not tested 
+        self._socket.RCVTIMEO = 30  # XXX: not tested
+        self._socket.SNDTIMEO = 30  # XXX: not tested
         self._socket.connect(self._addr)
         return self
 
@@ -79,6 +79,7 @@ class ZMQKVServer(object):
                     self._socket.send(pickle.dumps(result))
             except Exception as e:
                 print e
+
 
 if __name__ == "__main__":
     server = ZMQKVServer()
