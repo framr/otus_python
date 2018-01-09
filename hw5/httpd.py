@@ -7,16 +7,16 @@ http://code.activestate.com/recipes/259148-simple-http-server-based-on-asyncorea
 """
 from argparse import ArgumentParser
 import asyncore_epoll
-import asyncchat
+import asynchat
 from multiprocessing import Process
 import logging
 from logging import info
 import socket
 import namedtuple
+import urllib
+import mimetypes
+import os
 
-
-#class HTTPHandler(object):
-#    pass
 
 HTTPHeaders = namedtuple("HTTPHeader", "method uri protocol content_length")
 HTTPRequest = namedtuple("HTTPRequest", "body headers")
@@ -26,32 +26,129 @@ def parse_headers(data):
     pass
 
 
+def translate_path(self, path, workdir=None):
+    """
+    Translate PATH to the local filename syntax.
+    """
+    # abandon query parameters
+    path = path.split('?',1)[0]
+    path = path.split('#',1)[0]
+    path = urllib.unquote(path)
+    parts = path.split('/')
+    workdir = workdir or "."
+    return os.path.join(workdir, *parts)
+
+
+def guess_content_type(path):
+    try:
+        ctype = mimetypes.types_map[os.path.splitext(path)[1].lower()]
+    except KeyError:
+        return "application/octet-stream"
+    
+
 class HTTPProtocolMixins(object):
     """
-    Decouples some HTTP logic
-    methods named after counterparts in Lib/BaseHTTPServer.py
+    Decouples some HTTP logic.
+    Methods named after counterparts in Lib/BaseHTTPServer.py
     """
+    def do_GET(self):
+        fd = self.send_head()
+        if fd:
+            self.push_to_wire_with_producer(asynchat.simple_producer(fd.read()))
+            fd.close()
+        self.handle_close()
+
+    def do_HEAD(self):
+        fd = self.send_head()
+        if fd:
+            fd.close()
+        self.handle_close()
+
+    def send_head(self):
+        """
+        This sends the response code and MIME headers.
+        Common method for do_GET, do_HEAD.
+        """
+        path = self.translate_path(self.request.headers.uri)
+        if os.path.isdir(path):
+            path = os.path.join(path, "index.html")
+    
+        if not os.path.isfile(path):
+            self.send_error(404)
+            return None    
+        try:
+            fd = open(path, "rb")
+        except Exception:
+            self.send_error(500, "Error opening file")
+            return None
+
+        self.send_response(200)
+        self.send_header("Content-type", guess_content_type(path))
+        self.send_header("Content-Length", os.fstat(fd))
+        self.end_headers
+        return fd
+
     def send_error(self, code, msg=None):
-        # 
-        pass
+        try:
+            short_msg, long_msg = self.responses[code]
+        except KeyError:
+            short_msg, long_msg = "???", "???"
+        if msg is None:
+            msg = short_msg
+        #explain = long_msg
+        self.send_response(code, msg)
+        self.send_header("Connection", "close")
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+
+    def send_response(self, code, message=None):
+        """
+        Send response header
+        """
+        message = message or ""
+            if code in self.responses:
+                message = self.responses[code][0]
+            else:
+                message = ''
+        if self.request_version != 'HTTP/0.9':
+            self.wfile.write("%s %d %s\r\n" %
+                             (self.protocol_version, code, message))
+            # print (self.protocol_version, code, message)
+        self.send_header('Server', self.version_string())
+        self.send_header('Date', self.date_time_string())
+
+
+    def send_header(self, keyword, value):
+        """
+        Send single header keyword: value 
+        """
+
+    def end_headers(self):
+        """
+        Send the blank line ending the MIME headers.
+        """
+
     def push_to_wire(self, data):
         raise NotImplementedError
-    def do_GET(self):
-        pass
-    def do_HEAD(self):
-        pass
+    def push_to_wire_with_producer(self, data):
+        raise NotImplementedError
 
-    def do_method(self, meth):
-        try:
-            meth_func = getattr(self, "do_%s" % meth)
-            meth_func()
-        except AttributeError:
-            self.send_error()            
+    responses = {
+        100: ('Continue', 'Request received, please continue'),
+        101: ('Switching Protocols',
+              'Switching to new protocol; obey Upgrade header'),
 
+        200: ('OK', 'Request fulfilled, document follows'),
+        403: ('Forbidden',
+              'Request forbidden -- authorization will not help'),
+        404: ('Not Found', 'Nothing matches the given URI'),
+        405: ('Method Not Allowed',
+              'Specified method is invalid for this resource.'),
+        500: ('Internal Server Error', 'Server got itself in trouble')
+        }
 
 
 class HTTPRequestHandler(asynchat.async_chat):
-    # XXX: what about next request on the same socket???
     def __init__(self, sock):
         asynchat.async_chat.__init__(self, sock=sock)
         self.ibuffer = []
@@ -74,6 +171,9 @@ class HTTPRequestHandler(asynchat.async_chat):
 
     def push_to_wire(self, data):
         self.push(data)
+
+    def push_to_wire_with_producer(self, data):
+        self.push_with_producer(data)
 
     def found_terminator(self):
         """
@@ -99,15 +199,18 @@ class HTTPRequestHandler(asynchat.async_chat):
             self.handling = True
             self.request.body = self.data
             self.handle_request()
+
         # XXX: when we are done with current request, can next request come in the same client socket?
         # If it is possible, we have to reset the hander state
 
     def handle_request(self):
-        
-    def do_GET(self):
-        pass
-    def do_HEAD(self):
-        pass
+        mname = self.request.method
+        meth_func = getattr(self, "do_%s" % mname, None)
+        if not meth_func:
+            self.send_error(501, "Unsupported method (%r)" % mname)
+            self.handle_close()
+            return
+        meth_func()
 
 
 class AsyncoreServer(asyncore_epoll.dispatcher):
