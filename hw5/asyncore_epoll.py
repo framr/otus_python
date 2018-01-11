@@ -268,7 +268,9 @@ def loop(timeout=30.0, use_poll=False, map=None, count=None,
     if use_poll and hasattr(select, 'poll'):
         poller = poll_poller
     else:
-        poller = select_poller
+        # WTF??????????
+        # poller = select_poller
+        pass
 
     if count is None:
         while map:
@@ -295,7 +297,6 @@ class dispatcher:
             self._map = map
 
         self._fileno = None
-
         if sock:
             # Set to nonblocking just to make sure for cases where we
             # get a socket from a blocking source.

@@ -6,33 +6,46 @@ https://pymotw.com/2/asyncore/
 http://code.activestate.com/recipes/259148-simple-http-server-based-on-asyncoreasynchat/
 """
 from argparse import ArgumentParser
-import asyncore_epoll
+import asyncore_epoll as asyncore
 import asynchat
 from multiprocessing import Process
 import logging
-from logging import info
+from logging import info, exception
 import socket
-import namedtuple
 import urllib
 import mimetypes
 import os
+import time
 
 
-HTTPHeaders = namedtuple("HTTPHeader", "method uri protocol content_length")
-HTTPRequest = namedtuple("HTTPRequest", "body headers")
+SUPPORTED_PROTOCOLS = ("HTTP/1.0", "HTTP/1.1")
 
 
-def parse_headers(data):
+class ServerError(Exception):
     pass
+
+
+def parse_headers(data, sep="\r\n"):
+    splitted = data.split(sep)
+    start_line, headers = splitted[0], splitted[1:]
+    method, uri, protocol = start_line.split()
+    if protocol not in SUPPORTED_PROTOCOLS:
+        raise ServerError("protocol %s not supported" % protocol)
+    result = {"Method": method, "URI": uri, "Protocol": protocol}
+    for h in headers:
+        if h:
+            splitted = h.split(":", 1)
+            result[splitted[0]] = splitted[1]
+    return result
 
 
 def translate_path(self, path, workdir=None):
     """
-    Translate PATH to the local filename syntax.
+    Translate path to the local filename syntax.
     """
     # abandon query parameters
-    path = path.split('?',1)[0]
-    path = path.split('#',1)[0]
+    path = path.split('?', 1)[0]
+    path = path.split('#', 1)[0]
     path = urllib.unquote(path)
     parts = path.split('/')
     workdir = workdir or "."
@@ -44,7 +57,8 @@ def guess_content_type(path):
         ctype = mimetypes.types_map[os.path.splitext(path)[1].lower()]
     except KeyError:
         return "application/octet-stream"
-    
+    return ctype
+
 
 class HTTPProtocolMixins(object):
     """
@@ -56,26 +70,23 @@ class HTTPProtocolMixins(object):
         if fd:
             self.push_to_wire_with_producer(asynchat.simple_producer(fd.read()))
             fd.close()
-        self.handle_close()
 
     def do_HEAD(self):
         fd = self.send_head()
         if fd:
             fd.close()
-        self.handle_close()
 
     def send_head(self):
         """
         This sends the response code and MIME headers.
         Common method for do_GET, do_HEAD.
         """
-        path = self.translate_path(self.request.headers.uri)
+        path = translate_path(self.headers["URI"], DOCUMENT_ROOT)
         if os.path.isdir(path):
             path = os.path.join(path, "index.html")
-    
         if not os.path.isfile(path):
             self.send_error(404)
-            return None    
+            return None
         try:
             fd = open(path, "rb")
         except Exception:
@@ -84,7 +95,7 @@ class HTTPProtocolMixins(object):
 
         self.send_response(200)
         self.send_header("Content-type", guess_content_type(path))
-        self.send_header("Content-Length", os.fstat(fd))
+        self.send_header("Content-Length", os.fstat(fd.fileno()))
         self.end_headers
         return fd
 
@@ -95,7 +106,7 @@ class HTTPProtocolMixins(object):
             short_msg, long_msg = "???", "???"
         if msg is None:
             msg = short_msg
-        #explain = long_msg
+        # explain = long_msg
         self.send_response(code, msg)
         self.send_header("Connection", "close")
         self.send_header("Content-Type", "text/plain")
@@ -105,39 +116,41 @@ class HTTPProtocolMixins(object):
         """
         Send response header
         """
-        message = message or ""
-            if code in self.responses:
-                message = self.responses[code][0]
-            else:
-                message = ''
-        if self.request_version != 'HTTP/0.9':
-            self.wfile.write("%s %d %s\r\n" %
-                             (self.protocol_version, code, message))
-            # print (self.protocol_version, code, message)
-        self.send_header('Server', self.version_string())
-        self.send_header('Date', self.date_time_string())
-
+        if message is None:
+            message = self.responses[code][0] if code in self.responses else ""
+        self.push_to_wire("%s %s %s\r\n" % (self.headers["Protocol"], code, message))
+        self.send_header("Server", "Blashyrkh")
+        self.send_header("Date", self.date_time_string())
 
     def send_header(self, keyword, value):
         """
-        Send single header keyword: value 
+        Send single header keyword: value
         """
+        self.push_to_wire("%s: %s\r\n" % (keyword, value))
 
     def end_headers(self):
         """
         Send the blank line ending the MIME headers.
         """
+        self.push_to_wire("\r\n")
+
+    def date_time_string(self):
+        year, month, day, hh, mm, ss, wd, y, z = time.gmtime(time.time())
+        return "%s, %02d %3s %4d %02d:%02d:%02d GMT" % (
+               self.weekdayname[wd], day, self.monthname[month], year, hh, mm, ss)
 
     def push_to_wire(self, data):
         raise NotImplementedError
+
     def push_to_wire_with_producer(self, data):
         raise NotImplementedError
 
+    weekdayname = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    monthname = [None, 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
     responses = {
         100: ('Continue', 'Request received, please continue'),
-        101: ('Switching Protocols',
-              'Switching to new protocol; obey Upgrade header'),
-
         200: ('OK', 'Request fulfilled, document follows'),
         403: ('Forbidden',
               'Request forbidden -- authorization will not help'),
@@ -148,14 +161,15 @@ class HTTPProtocolMixins(object):
         }
 
 
-class HTTPRequestHandler(asynchat.async_chat):
+class HTTPRequestHandler(HTTPProtocolMixins, asynchat.async_chat):
     def __init__(self, sock):
-        asynchat.async_chat.__init__(self, sock=sock)
+        asynchat.async_chat.__init__(self, sock)
         self.ibuffer = []
         self.set_terminator("\r\n\r\n")
         self.reading_headers = True
         self.handling = False
-        self.request = HTTPRequest()
+        self.headers = None
+        self.body = None
 
     def collect_incoming_data(self, data):
         """
@@ -166,7 +180,7 @@ class HTTPRequestHandler(asynchat.async_chat):
     @property
     def data(self):
         d = "".join(self.ibuffer)
-        del self.ibuffer[:]
+        #del self.ibuffer[:]
         return d
 
     def push_to_wire(self, data):
@@ -180,63 +194,69 @@ class HTTPRequestHandler(asynchat.async_chat):
         callback activated on terminator, mandatory method
         """
         if self.reading_headers:
-            self.request.headers = parse_headers(self.data)
-            if not self.request.headers:
+            self.reading_headers = False
+            try:
+                self.headers = parse_headers(self.data)
+            except Exception:
+                exception("error parsing headers")
                 self.send_error(400, "Error parsing headers")
                 self.handle_close()
 
             self.ibuffer = []
-            if header.method == "POST":
+            if self.headers["Method"] == "POST":
                 # we have more data to read
-                self.set_terminator(self.request.headers.content_length)
+                self.set_terminator(self.headers.get("Content-Length", 0))
             else:
                 self.set_terminator(None)
                 self.handle_request()
         elif not self.handling:
             # browsers sometime oversend
             # https://docs.python.org/2/library/asynchat.html
-            self.set_terminator(None)            
+            self.set_terminator(None)
             self.handling = True
-            self.request.body = self.data
+            self.body = self.data
             self.handle_request()
 
-        # XXX: when we are done with current request, can next request come in the same client socket?
-        # If it is possible, we have to reset the hander state
-
     def handle_request(self):
-        mname = self.request.method
+        mname = self.headers["Method"]
         meth_func = getattr(self, "do_%s" % mname, None)
         if not meth_func:
             self.send_error(501, "Unsupported method (%r)" % mname)
             self.handle_close()
             return
         meth_func()
+        self.handle_close()
 
 
-class AsyncoreServer(asyncore_epoll.dispatcher):
+class AsyncoreServer(asyncore.dispatcher):
     def __init__(self, work_dir=".", host="127.0.0.1", port="8889", lsock_backlog=128):
-        asyncore_epoll.dispatcher.__init__(self)
+        asyncore.dispatcher.__init__(self)
         # create listening socket and push it into epoll/select map
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        # https://www.nginx.com/blog/socket-sharding-nginx-release-1-9-1/ 
-        self.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        # https://www.nginx.com/blog/socket-sharding-nginx-release-1-9-1/
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self.bind((host, port))
         self.listen(lsock_backlog)
+        self.host = host
+        self.port = port
 
     def handle_accept(self):
         client_info = self.accept()
-        if client_info: 
+        if client_info:
+            info("got client")
             sock, addr = client_info
             HTTPRequestHandler(sock)
 
     def serve_forever(self):
         try:
-            asyncore_epoll.loop(timeout=2, poller=asyncore_epoll.epoll_poller)
+            info("Starting server at %s:%s" % (self.host, self.port))
+            asyncore.loop(timeout=2, poller=asyncore.epoll_poller)
         except Exception:
-            pass
+            exception("Server got error")
         except BaseException:
-            info("server shutdown")
+            info("Server shutdown")
         finally:
+            info("Server exit")
             self.close()
 
 
@@ -244,9 +264,14 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("-w", dest="workers", type=int, default=1, help="Number of workers")
     parser.add_argument("-r", dest="document_root", type=str, default=".", help="Web server internal storage path")
-    parser.add_argument("-h", "--host", dest="host", type=str, default="127.0.0.1", help="host")
+    parser.add_argument("--host", dest="host", type=str, default="127.0.0.1", help="host")
     parser.add_argument("-p", "--port", dest="port", type=int, default=8889, help="port")
+    parser.add_argument("--log", dest="log", type=str, default=None, help="log file")
     args = parser.parse_args()
+
+    logging.basicConfig(filename=args.log, level=logging.INFO,
+                        format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
+    DOCUMENT_ROOT = args.document_root
 
     pool = []
     for _ in range(args.workers):
@@ -254,7 +279,6 @@ if __name__ == "__main__":
         p = Process(target=server.serve_forever)
         p.start()
         pool.append(p)
-
-    info("All my workers are dead")
     for p in pool:
         p.join()
+    info("All my workers are dead")

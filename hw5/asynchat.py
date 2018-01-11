@@ -46,7 +46,7 @@ method) up to the terminator, and then control will be returned to
 you - by calling your self.found_terminator() method.
 """
 
-import asyncore
+import asyncore_epoll as asyncore
 import errno
 import socket
 from collections import deque
@@ -110,7 +110,6 @@ class async_chat (asyncore.dispatcher):
     # if found, transition to the next state.
 
     def handle_read (self):
-
         try:
             data = self.recv (self.ac_in_buffer_size)
         except socket.error, why:
