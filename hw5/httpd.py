@@ -16,6 +16,9 @@ import urllib
 import mimetypes
 import os
 import time
+import cgi
+import sys
+from StringIO import StringIO
 
 
 SUPPORTED_PROTOCOLS = ("HTTP/1.0", "HTTP/1.1")
@@ -39,7 +42,13 @@ def parse_headers(data, sep="\r\n"):
     return result
 
 
-def translate_path(self, path, workdir=None):
+def url_basename(url):
+    filename = url.split("/")[-1].split("#")[0].split("?")[0]
+    base = "/".join(url.split("/")[:-1])
+    return base, filename
+
+
+def translate_path(path, workdir):
     """
     Translate path to the local filename syntax.
     """
@@ -48,7 +57,6 @@ def translate_path(self, path, workdir=None):
     path = path.split('#', 1)[0]
     path = urllib.unquote(path)
     parts = path.split('/')
-    workdir = workdir or "."
     return os.path.join(workdir, *parts)
 
 
@@ -60,6 +68,20 @@ def guess_content_type(path):
     return ctype
 
 
+class SimpleFileProducer(object):
+    def __init__(self, fd, buffer_size=512):
+        self.fd = fd
+        self.buffer_size = buffer_size
+
+    def more(self):
+        data = self.fd.read(self.buffer_size)
+        if data:
+            return data
+        else:
+            self.fd.close()
+            return ""
+
+
 class HTTPProtocolMixins(object):
     """
     Decouples some HTTP logic.
@@ -68,7 +90,7 @@ class HTTPProtocolMixins(object):
     def do_GET(self):
         fd = self.send_head()
         if fd:
-            self.push_to_wire_with_producer(asynchat.simple_producer(fd.read()))
+            self.push_to_wire_with_producer(SimpleFileProducer(fd))
             fd.close()
 
     def do_HEAD(self):
@@ -85,6 +107,15 @@ class HTTPProtocolMixins(object):
         if os.path.isdir(path):
             path = os.path.join(path, "index.html")
         if not os.path.isfile(path):
+            try:
+                fdir, fname = url_basename(path)
+                if fname == "index.html":
+                    index_html = self.list_directory(fdir)
+                    return index_html
+            except Exception:
+                exception("error retrieving listing")
+                #self.send_error(404)
+                #return None
             self.send_error(404)
             return None
         try:
@@ -98,6 +129,36 @@ class HTTPProtocolMixins(object):
         self.send_header("Content-Length", os.fstat(fd.fileno()))
         self.end_headers
         return fd
+
+    def list_directory(self, path):
+        listing = os.listdir(path)
+        listing.sort(key=lambda a: a.lower())
+        f = StringIO()
+        f.write('<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">')
+        f.write("<html>\n<title>Directory listing</title>\n")
+        f.write("<body>\n<h2>Directory listing</h2>\n")
+        f.write("<hr>\n<ul>\n")
+        for name in listing:
+            fullname = os.path.join(path, name)
+            displayname = linkname = name
+            # Append / for directories or @ for symbolic links
+            if os.path.isdir(fullname):
+                displayname = name + "/"
+                linkname = name + "/"
+            if os.path.islink(fullname):
+                displayname = name + "@"
+                # Note: a link to a directory displays with @ and links with /
+            f.write('<li><a href="%s">%s</a>\n'
+                    % (urllib.quote(linkname), cgi.escape(displayname)))
+        f.write("</ul>\n<hr>\n</body>\n</html>\n")
+        length = f.tell()
+        f.seek(0)
+        self.send_response(200)
+        encoding = sys.getfilesystemencoding()
+        self.send_header("Content-type", "text/html; charset=%s" % encoding)
+        self.send_header("Content-Length", str(length))
+        self.end_headers()
+        return f
 
     def send_error(self, code, msg=None):
         try:
