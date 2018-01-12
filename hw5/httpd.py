@@ -60,6 +60,14 @@ def translate_path(path, workdir):
     return os.path.join(workdir, *parts)
 
 
+def validate_root_escape(root, path):
+    real = os.path.realpath(path)
+    root_real = os.path.realpath(root)
+    if real.startswith(root_real):
+        return True
+    return False
+
+
 def guess_content_type(path):
     try:
         ctype = mimetypes.types_map[os.path.splitext(path)[1].lower()]
@@ -104,8 +112,14 @@ class HTTPProtocolMixins(object):
         Common method for do_GET, do_HEAD.
         """
         path = translate_path(self.headers["URI"], DOCUMENT_ROOT)
+        if not validate_root_escape(DOCUMENT_ROOT, path):
+            self.send_error(404)
+            return None
+
         if os.path.isdir(path):
             path = os.path.join(path, "index.html")
+
+        print path
         if not os.path.isfile(path):
             try:
                 fdir, fname = url_basename(path)
@@ -126,8 +140,8 @@ class HTTPProtocolMixins(object):
 
         self.send_response(200)
         self.send_header("Content-type", guess_content_type(path))
-        self.send_header("Content-Length", os.fstat(fd.fileno()))
-        self.end_headers
+        self.send_header("Content-Length", str(os.fstat(fd.fileno())[6]))
+        self.end_headers()
         return fd
 
     def list_directory(self, path):
