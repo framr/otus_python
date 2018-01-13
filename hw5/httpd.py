@@ -4,6 +4,7 @@ Examples of asyncchat http request handler and asyncore usage can be found here
 https://docs.python.org/2/library/asynchat.html
 https://pymotw.com/2/asyncore/
 http://code.activestate.com/recipes/259148-simple-http-server-based-on-asyncoreasynchat/
+See also Lib/BaseHTTPServer.py and Lib/SimpleHTTPServer.py
 """
 from argparse import ArgumentParser
 import asyncore_epoll as asyncore
@@ -22,7 +23,7 @@ from StringIO import StringIO
 
 
 SUPPORTED_PROTOCOLS = ("HTTP/1.0", "HTTP/1.1")
-
+RECREATE_INDEX_HTML = False
 
 class ServerError(Exception):
     pass
@@ -93,18 +94,21 @@ class SimpleFileProducer(object):
 class HTTPProtocolMixins(object):
     """
     Decouples some HTTP logic.
-    Methods named after counterparts in Lib/BaseHTTPServer.py
+    Methods named after counterparts in Lib/BaseHTTPServer.py and Lib/SimpleHTTPServer.py
     """
     def do_GET(self):
         fd = self.send_head()
         if fd:
             self.push_to_wire_with_producer(SimpleFileProducer(fd))
-            fd.close()
+            self.close_when_done()
+        else:
+            self.handle_close()
 
     def do_HEAD(self):
         fd = self.send_head()
         if fd:
             fd.close()
+        self.handle_close()
 
     def send_head(self):
         """
@@ -115,21 +119,17 @@ class HTTPProtocolMixins(object):
         if not validate_root_escape(DOCUMENT_ROOT, path):
             self.send_error(404)
             return None
-
         if os.path.isdir(path):
             path = os.path.join(path, "index.html")
 
-        print path
         if not os.path.isfile(path):
-            try:
-                fdir, fname = url_basename(path)
-                if fname == "index.html":
+            fdir, fname = url_basename(path)
+            if fname == "index.html":
+                if RECREATE_INDEX_HTML:
                     index_html = self.list_directory(fdir)
                     return index_html
-            except Exception:
-                exception("error retrieving listing")
-                #self.send_error(404)
-                #return None
+                else:
+                    self.send_error(403)
             self.send_error(404)
             return None
         try:
@@ -280,7 +280,11 @@ class HTTPRequestHandler(HTTPProtocolMixins, asynchat.async_chat):
             self.ibuffer = []
             if self.headers["Method"] == "POST":
                 # we have more data to read
-                self.set_terminator(self.headers.get("Content-Length", 0))
+                l = self.headers.get("Content-Length", 0)
+                if l == 0:
+                    self.handle_request()
+                else:
+                    self.set_terminator(int(l))
             else:
                 self.set_terminator(None)
                 self.handle_request()
@@ -296,11 +300,11 @@ class HTTPRequestHandler(HTTPProtocolMixins, asynchat.async_chat):
         mname = self.headers["Method"]
         meth_func = getattr(self, "do_%s" % mname, None)
         if not meth_func:
-            self.send_error(501, "Unsupported method (%r)" % mname)
+            self.send_error(405, "Unsupported method (%r)" % mname)
             self.handle_close()
             return
         meth_func()
-        self.handle_close()
+        #self.handle_close()
 
 
 class AsyncoreServer(asyncore.dispatcher):
