@@ -322,7 +322,7 @@ class AsyncoreServer(asyncore.dispatcher):
     def handle_accept(self):
         client_info = self.accept()
         if client_info:
-            info("got client")
+            #info("got client")
             sock, addr = client_info
             HTTPRequestHandler(sock)
 
