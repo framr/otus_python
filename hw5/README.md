@@ -1,10 +1,15 @@
-Async Server based on asyncore/asynchat (with epoll patch).
+# Async Server based on asyncore/asynchat (with epoll patch).
 
 
-Load testing results:
+## Load testing results:
+
+Test command:
+```
 ab -n 50000 -c 100 -r http://localhost:8080/
+```
 
 1) One worker
+```
 This is ApacheBench, Version 2.3 <$Revision: 1528965 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
@@ -48,9 +53,10 @@ Percentage of the requests served within a certain time (ms)
   98%     36
   99%     36
  100%     37 (longest request)
-
+```
 
 2) 4 workers
+```
 ./httpd.py -r ./http-test-suite/ -p 8080 -w 4
 This is ApacheBench, Version 2.3 <$Revision: 1528965 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
@@ -95,5 +101,4 @@ Percentage of the requests served within a certain time (ms)
   98%     64
   99%     66
  100%     76 (longest request)
-
-
+```
