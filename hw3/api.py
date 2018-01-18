@@ -8,12 +8,12 @@ import hashlib
 import uuid
 from optparse import OptionParser
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
-from retry import retry
 
 from model_v1 import CharField, ArgumentsField, EmailField, PhoneField, DateField, BirthDayField, GenderField,\
         ClientIDsField, ValidatedRequest
 from scoring import get_score, get_interests
 from kvstore import ZMQKVClient
+from retry import retry
 
 
 SALT = "Otus"
@@ -158,7 +158,7 @@ def method_handler(request, ctx, store):
 
 
 # XXX: we should better catch only kvstore/network errors here
-@retry(Exception, delay=1, jitter=1, tries=3)
+@retry(Exception, tries=3)
 def get_store():
     return ZMQKVClient().init_connection()
 

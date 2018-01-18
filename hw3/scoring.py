@@ -1,6 +1,6 @@
 import hashlib
 import json
-from retry.api import retry_call
+from retry import retry_call
 from logging import exception
 
 
@@ -46,5 +46,5 @@ def get_score(store, phone, email, birthday=None, gender=None, first_name=None, 
 
 
 def get_interests(store, cid):
-    r = retry_call(store.get, ["i:%s" % cid], tries=3)
+    r = retry_call(store.get, args=["i:%s" % cid], tries=3)
     return json.loads(r) if r else []
