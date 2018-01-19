@@ -8,31 +8,67 @@ import datetime
 Record = namedtuple("Record", "value update_time ttl")
 
 
-class ZMQKVClient(object):
-    def __init__(self, addr="tcp://127.0.0.1:42420"):
-        self._context = zmq.Context()
+class ConnectionError(Exception):
+    pass
+
+
+class Connection(object):
+    def __init__(self, addr="tcp://127.0.0.1:42420", timeout=60, retries=3):
+        self._context = zmq.Context(1)
         self._addr = addr
+        self._poller = zmq.Poller()
+        self._retries = retries
+        self._timeout = timeout
 
     def init_connection(self):
         self._socket = self._context.socket(zmq.REQ)
-        # https://stackoverflow.com/questions/7538988/zeromq-how-to-prevent-infinite-wait
-        self._socket.RCVTIMEO = 30  # XXX: not tested
-        self._socket.SNDTIMEO = 30  # XXX: not tested
         self._socket.connect(self._addr)
         return self
+
+    def send(self, data, timeout=None):
+        # implementes Lazy Pirate pattern
+        # http://zguide.zeromq.org/page:all#Client-side-Reliability-Lazy-Pirate-Pattern
+        _timeout = timeout or self._timeout
+        retries_left = self._retries
+        while retries_left > 0:
+            self._poller.register(self._socket, zmq.POLLIN)
+            self._socket.send(data)
+            socks = dict(poll.poll(_timeout))
+            if socks.get(self._socket) == zmq.POLLIN:
+                reply = self._socket.recv()
+                if reply:
+                    return reply
+
+            # error, reconnect
+            self._socket.setsockopt(zmq.LINGER, 0)
+            self._socket.close()
+            self._poller.unregister(self._socket)
+            retries_left -= 1
+            # restore client socket
+            self.init_connection()
+            if retries_left <= 0:
+                raise ConnectionError("Cannot send data to server")
+
+
+class ZMQKVClient(object):
+    def __init__(self, addr="tcp://127.0.0.1:42420", timeout=60, retries=3):
+        self._conn = Connection()
+    
+    def init_connection(self):
+        self._conn.init_connection()
 
     def _get(self, key, cache=False):
         cmd = "get" if not cache else "get_cache"
         # should we reconnect on error? read zmq docs..
-        self._socket.send(pickle.dumps((cmd, key, None)))
-        data = pickle.loads(self._socket.recv()) or {}
+        res = self._conn.send(pickle.dumps((cmd, key, None)))
+        data = pickle.loads(res) or {}
         return Record(data.get("value", None), data.get("update_time", None), data.get("ttl", None))
 
     def _set(self, key, value, cache=False, ttl=None):
         cmd = "set" if not cache else "set_cache"
         rec = {"value": value, "update_time": datetime.now(), "ttl": ttl}
-        self._socket.send(pickle.dumps((cmd, key, rec)))
-        return self._socket.recv() == b"ok"
+        res = self._conn.send(pickle.dumps((cmd, key, rec)))
+        return res == b"ok"
 
     def get(self, key):
         rec = self._get(key, cache=False)
