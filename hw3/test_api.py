@@ -6,9 +6,12 @@ import hashlib
 from datetime import datetime
 from scoring import user_key
 import json
+from cStringIO import StringIO
+
 
 import api
-from api import ClientsInterestsRequest, MethodRequest, OnlineScoreRequest
+from api import ClientsInterestsRequest, MethodRequest, OnlineScoreRequest, MainHTTPHandler
+from kvstore import Connection, ZMQKVClient, ConnectionError
 
 
 SALT = "Otus"
@@ -65,13 +68,13 @@ class TestApi(object):
     def __init__(self):
         self.context = {}
         self.headers = {}
-        #self.store = MockKVStore()
+        # self.store = MockKVStore()
     def get_response(self, request, store=None):
         self.context = {}
         return api.method_handler({"body": request, "headers": self.headers}, self.context, store)
     def enforce_valid_token(self, request):
         if request["login"] == ADMIN_LOGIN:
-            # XXX: relying on datetime.now() is a bad idea, we should better monkeypatch it 
+            # XXX: relying on datetime.now() is a bad idea, we should better monkeypatch it
             digest = hashlib.sha512(datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).hexdigest()
         else:
             digest = hashlib.sha512(request["account"] + request["login"] + SALT).hexdigest()
@@ -90,7 +93,7 @@ def test__empty_request(request, test_api):
 
 
 @pytest.mark.parametrize("request", [
-    {"account": u"horns&hoofs", "logiiiiin": u"h&f", "token": u"TBD", "arguments": {}, "method": u"online_score"},    
+    {"account": u"horns&hoofs", "logiiiiin": u"h&f", "token": u"TBD", "arguments": {}, "method": u"online_score"},
     {"account": u"horns&hoofs", "login": u"h&f", "tokeeeeen": u"TBD", "arguments": {}, "method": u"online_score"},
     {"account": u"horns&hoofs", "login": u"h&f", "token": u"TBD", "argumeeeeeents": {}, "method": u"online_score"},
     {"account": u"horns&hoofs", "login": u"h&f", "token": u"TBD", "arguments": {}, "meeeeeethod": u"online_score"},
@@ -120,17 +123,6 @@ def test_invalid_request_bad_arg_type(request, test_api):
 def test_auth_bad(request, test_api):
     msg, code = test_api.get_response(request)
     assert code == api.FORBIDDEN
- 
-
-@pytest.mark.parametrize("request", [
-    {"account": u"horns&hoofs", "login": u"h&f", "arguments": {}, "method": u"online_scoreXXX"},
-    {"account": u"horns&hoofs", "login": u"admin", "arguments": {}, "method": -1},
-    {"account": u"horns&hoofs", "login": u"admin", "arguments": {}, "method": 0},
-    ])
-def test_invalid_method_name(request, test_api):
-    test_api.enforce_valid_token(request)
-    msg, code = test_api.get_response(request)
-    assert code == api.INVALID_REQUEST
 
 
 @pytest.mark.parametrize("request", [
@@ -233,17 +225,7 @@ def test_return_score_from_store_cache_utf8_rus_name(score, kvstore, test_api):
     assert json.loads(res) == {"score": score}
 
 
-@pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
-def test_return_score_cache_unavailable(score, kvstore, test_api):
-    args = {"first_name": u"Darth", "last_name": u"Vader"}
-    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}    
-    key = user_key(first_name=args["first_name"], last_name=args["last_name"])
-    test_api.enforce_valid_token(request)
-    res, code  = test_api.get_response(request, store=None)
-    assert code == api.OK
-
-
-def test__clients_interests_request_returns_valid_interests(kvstore, test_api): 
+def test_clients_interests_request_returns_valid_interests(kvstore, test_api): 
     args = {"client_ids": [1, 2], "date": u"01.01.2018"}
     def key(cid):
         return "i:%s" % cid
@@ -257,7 +239,7 @@ def test__clients_interests_request_returns_valid_interests(kvstore, test_api):
     assert data == {"1": [u"pets", u"tv"], "2": [u"travel", u"music"]}
 
 
-def test__clients_interests_request_returns_valid_interests_utf8_rus_interests(kvstore, test_api): 
+def test_clients_interests_request_returns_valid_interests_utf8_rus_interests(kvstore, test_api): 
     args = {"client_ids": [1, 2], "date": u"01.01.2018"}
     def key(cid):
         return "i:%s" % cid
@@ -271,7 +253,7 @@ def test__clients_interests_request_returns_valid_interests_utf8_rus_interests(k
     assert data == {"1": [u"котики", u"единороги"], "2": [u"митал", u"гитары"]}
 
 
-def test__clients_interests_request_returns_valid_interests(kvstore, test_api): 
+def test_clients_interests_request_returns_valid_interests(kvstore, test_api): 
     args = {"client_ids": [1, 2], "date": u"01.01.2018"}
     def key(cid):
         return "i:%s" % cid
@@ -285,7 +267,7 @@ def test__clients_interests_request_returns_valid_interests(kvstore, test_api):
     assert data == {"1": [u"pets", u"tv"], "2": [u"travel", u"music"]}
 
 
-def test__clients_interests_request_ok(kvstore, test_api): 
+def test_clients_interests_request_ok(kvstore, test_api): 
     args = {"client_ids": [1, 2], "date": u"01.01.2018"}
     def key(cid):
         return "i:%s" % cid
@@ -296,13 +278,100 @@ def test__clients_interests_request_ok(kvstore, test_api):
     assert test_api.context == {"nclients": 2}
 
 
-def test__clients_interests_store_unavailable_raises(kvstore, test_api): 
+######### Test behaviour when kvstore connection fails ##########
+
+@pytest.fixture()
+def bad_kvstore():
+    class BadConnection(Connection):
+        def init_connection(self):
+            return self
+        def send(data):
+            raise ConnectionError("Network Error")
+    return ZMQKVClient(connection_cls=BadConnection)
+
+
+@pytest.mark.parametrize("score", [0.1, -1.0, 100.0, 1e+6])
+def test_return_score_cache_unavailable(score, bad_kvstore, test_api):
+    args = {"first_name": u"Darth", "last_name": u"Vader"}
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}    
+    key = user_key(first_name=args["first_name"], last_name=args["last_name"])
+    test_api.enforce_valid_token(request)
+    res, code  = test_api.get_response(request, store=bad_kvstore)
+    assert code == api.OK
+
+
+def test__clients_interests_store_unavailable_raises(bad_kvstore, test_api): 
     args = {"client_ids": [1, 2], "date": u"01.01.2018"}
     def key(cid):
         return "i:%s" % cid
     request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"clients_interests"}
-    test_api.enforce_valid_token(request) 
+    test_api.enforce_valid_token(request)
     with pytest.raises(Exception):
-        _, _ = test_api.get_response(request, store=None)
+        _, _ = test_api.get_response(request, store=bad_kvstore)
 
 
+######### Test MainHTTPHandler ##########
+
+class TestMainHTTPHandler(MainHTTPHandler):
+    def __init__(self):
+        pass
+    def method_handler(self):
+        pass
+    def setup(self):
+        self.headers = {"Content-Length": 0}
+        self.rfile = StringIO()
+        self.wfile = StringIO()
+        self.path = ""
+        self.router = {"method": self.method_handler}
+        return self
+    def finish(self):
+        self.rfile.close()
+        self.wfile.close()
+    def send_response(self, code):
+        pass
+    def send_header(self, key, value):
+        pass
+    def end_headers(self):
+        pass
+
+@pytest.fixture()
+def httphandler():
+    return TestMainHTTPHandler().setup()
+
+
+def test_bad_request_for_malformed_json(httphandler):
+    data = "XXX%s" % json.dumps({})
+    httphandler.rfile.write(data)
+    httphandler.rfile.seek(0)
+    httphandler.headers["Content-Length"] = len(data)
+    httphandler.do_POST()
+    response = json.loads(httphandler.wfile.getvalue())
+    assert response["code"] == 400
+
+
+def test_404_for_bad_method(httphandler):
+    data = "%s" % json.dumps({"id": 1})
+    httphandler.rfile.write(data)
+    httphandler.rfile.seek(0)
+    httphandler.headers["Content-Length"] = len(data)
+    httphandler.path = "mypath"
+    httphandler.do_POST()
+    response = json.loads(httphandler.wfile.getvalue())
+    assert response["code"] == 404
+
+
+def test_request_passed_to_router(httphandler):
+    args = {"first_name": u"Darth", "last_name": u"Vader"}
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}
+    data = json.dumps(request)
+    httphandler.rfile.write(data)
+    httphandler.rfile.seek(0)
+    httphandler.headers["Content-Length"] = len(data)
+    httphandler.path = "method"
+    def method_handler(request, ctx, store):
+        return json.dumps({"score": 42}), 200
+    httphandler.router = {"method": method_handler}
+    httphandler.do_POST()
+    response = json.loads(httphandler.wfile.getvalue())
+    assert response["response"] == json.dumps({"score": 42})
+    assert response["code"] == 200

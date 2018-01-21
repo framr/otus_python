@@ -1,6 +1,6 @@
 import hashlib
 import json
-from retry import retry_call
+from myretry import retry_call
 from logging import exception
 
 

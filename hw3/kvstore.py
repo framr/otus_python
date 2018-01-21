@@ -3,7 +3,7 @@
 import zmq
 from collections import namedtuple
 import pickle
-import datetime
+from datetime import datetime
 
 Record = namedtuple("Record", "value update_time ttl")
 
@@ -33,7 +33,7 @@ class Connection(object):
         while retries_left > 0:
             self._poller.register(self._socket, zmq.POLLIN)
             self._socket.send(data)
-            socks = dict(poll.poll(_timeout))
+            socks = dict(self._poller.poll(_timeout))
             if socks.get(self._socket) == zmq.POLLIN:
                 reply = self._socket.recv()
                 if reply:
@@ -51,15 +51,15 @@ class Connection(object):
 
 
 class ZMQKVClient(object):
-    def __init__(self, addr="tcp://127.0.0.1:42420", timeout=60, retries=3):
-        self._conn = Connection()
-    
+    def __init__(self, addr="tcp://127.0.0.1:42420", timeout=60, retries=3, connection_cls=Connection):
+        self._conn = connection_cls(addr=addr, timeout=timeout, retries=retries)
+
     def init_connection(self):
         self._conn.init_connection()
+        return self
 
     def _get(self, key, cache=False):
         cmd = "get" if not cache else "get_cache"
-        # should we reconnect on error? read zmq docs..
         res = self._conn.send(pickle.dumps((cmd, key, None)))
         data = pickle.loads(res) or {}
         return Record(data.get("value", None), data.get("update_time", None), data.get("ttl", None))

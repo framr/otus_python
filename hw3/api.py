@@ -13,7 +13,7 @@ from model_v1 import CharField, ArgumentsField, EmailField, PhoneField, DateFiel
         ClientIDsField, ValidatedRequest
 from scoring import get_score, get_interests
 from kvstore import ZMQKVClient
-from retry import retry
+from myretry import retry
 
 
 SALT = "Otus"
