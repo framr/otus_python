@@ -339,7 +339,7 @@ def httphandler():
     return TestMainHTTPHandler().setup()
 
 
-def test_bad_request_for_malformed_json(httphandler):
+def test_400_for_malformed_json(httphandler):
     data = "XXX%s" % json.dumps({})
     httphandler.rfile.write(data)
     httphandler.rfile.seek(0)
@@ -360,7 +360,7 @@ def test_404_for_bad_method(httphandler):
     assert response["code"] == 404
 
 
-def test_request_passed_to_router(httphandler):
+def test_request_response_routing(httphandler):
     args = {"first_name": u"Darth", "last_name": u"Vader"}
     request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}
     data = json.dumps(request)
@@ -369,9 +369,25 @@ def test_request_passed_to_router(httphandler):
     httphandler.headers["Content-Length"] = len(data)
     httphandler.path = "method"
     def method_handler(request, ctx, store):
-        return json.dumps({"score": 42}), 200
+        return json.dumps(request), 200
     httphandler.router = {"method": method_handler}
     httphandler.do_POST()
     response = json.loads(httphandler.wfile.getvalue())
-    assert response["response"] == json.dumps({"score": 42})
+    assert json.loads(response["response"])["body"] == request
     assert response["code"] == 200
+
+
+def test_500_for_handler_exception(httphandler):
+    args = {"first_name": u"Darth", "last_name": u"Vader"}
+    request = {"account": u"horns&hoofs", "login": u"h&f", "arguments": args, "method": u"online_score"}
+    data = json.dumps(request)
+    httphandler.rfile.write(data)
+    httphandler.rfile.seek(0)
+    httphandler.headers["Content-Length"] = len(data)
+    httphandler.path = "method"
+    def method_handler(request, ctx, store):
+        raise ValueError
+    httphandler.router = {"method": method_handler}
+    httphandler.do_POST()
+    response = json.loads(httphandler.wfile.getvalue())
+    assert response["code"] == 500

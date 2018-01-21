@@ -160,7 +160,12 @@ def method_handler(request, ctx, store):
 # XXX: we should better catch only kvstore/network errors here
 @retry(Exception, tries=3)
 def get_store():
-    return ZMQKVClient().init_connection()
+    try:
+        conn = ZMQKVClient().init_connection()
+    except Exception:
+        exception("Error connecting to DB")
+        conn = None
+    return conn
 
 
 class MainHTTPHandler(BaseHTTPRequestHandler):
