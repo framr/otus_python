@@ -159,9 +159,9 @@ def method_handler(request, ctx, store):
 
 # XXX: we should better catch only kvstore/network errors here
 @retry(Exception, tries=3)
-def get_store():
+def get_store(addr="tcp://127.0.0.1:42420", timeout=60):
     try:
-        conn = ZMQKVClient().init_connection()
+        conn = ZMQKVClient(addr=addr, timeout=timeout).init_connection()
     except Exception:
         exception("Error connecting to DB")
         conn = None
@@ -173,6 +173,9 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         "method": method_handler
     }
     store = get_store()
+    @classmethod
+    def set_store(cls, store):
+        cls.store = store
 
     def get_request_id(self, headers):
         return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)

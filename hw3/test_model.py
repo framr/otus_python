@@ -16,6 +16,21 @@ def test_auto_storage():
     t.auto = None
     assert t.auto is None
 
+    t.auto = -1
+    assert t.auto == -1
+
+    t.auto = "abc"
+    assert t.auto == "abc"
+
+    t.auto = ""
+    assert t.auto == ""
+
+    t.auto = [1, 2, 3]
+    assert t.auto == [1, 2, 3]
+
+    t.auto = {1: 1, 2: 2, 3: 3}
+    assert t.auto == {1: 1, 2: 2, 3: 3}
+
 
 @pytest.fixture()
 def req():
