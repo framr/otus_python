@@ -3,13 +3,14 @@ import scipy
 from scipy import sparse
 
 from .data import SimpleDataIter, Dataset
-from .opt import SGDOptimizer
+from .opt import *
+from .model import *
 
 
 class LogisticRegression(object):
     def __init__(self):
         self.loss_history = None
-        self.optimizer = None
+        self.opt = None
         self.model = None
         self.calc_loss_every_n_batches = 1
 
@@ -30,7 +31,7 @@ class LogisticRegression(object):
                 self.opt.step(batch.X, batch.y, self.model)
 
     def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100,
-              batch_size=200, optimizer=None, verbose=False):
+              batch_size=200, optimizer=None, model=None, verbose=False, calc_loss_every_n_batches=1):
         """
         Train this classifier using stochastic gradient descent.
 
@@ -49,10 +50,12 @@ class LogisticRegression(object):
         """
         # Add a column of ones to X for the bias sake.
         X = LogisticRegression.append_biases(X)
-        num_train, dim = X.shape
+        self.calc_loss_every_n_batches = calc_loss_every_n_batches
 
         if optimizer is None:
-            self.opt = SGDOptimizer(lr=learning_rate, l2=reg)
+            self.opt = SGDOptimizer(lr=learning_rate)
+        if model is None:
+            self.model = LogRegModel(l2=reg)
 
         diter = SimpleDataIter(batch_size=batch_size, dataset=Dataset(X, y))
         self._train(diter, num_iters=num_iters, verbose=verbose)

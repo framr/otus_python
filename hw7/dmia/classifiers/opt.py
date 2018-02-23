@@ -1,5 +1,6 @@
 __all__ = ["FTRLOptimizer", "SGDOptimizer"]
 
+
 class Optimizer(object):
     def __init__(self, lr):
         self.lr0 = lr
@@ -27,7 +28,7 @@ class SGDOptimizer(Optimizer):
         model.w[:-1] -= 2 * lr * l2 * model.w[:-1] / X.shape[0]
 
 
-class FTRLOptimizer(Optimizer:
+class FTRLOptimizer(Optimizer):
     pass
 
 

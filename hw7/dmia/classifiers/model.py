@@ -2,6 +2,8 @@ import scipy
 from scipy.sparse import csr_matrix
 import numpy as np
 
+__all__ = "LogRegModel SparseLogRegModel".split()
+
 
 class Model(object):
     pass
