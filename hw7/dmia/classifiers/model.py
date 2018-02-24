@@ -18,10 +18,10 @@ class LogRegModel(Model):
     in data for efficient computation.
     """
 
-    def __init__(self, dim, l2=0.0, sparse_w=False, sparse_g=False):
+    def __init__(self, dim, l2=0.0):
         self.dim = dim
         self.l2 = 0.0
-        self.w = None
+        self.w = None  # weight vector. last weight = bias
         self.p = None  # predictions
         self.g = None  # data gradient
 
@@ -35,7 +35,7 @@ class LogRegModel(Model):
 
     def loss(self, X, y, only_data_loss=False):
         p = self.predict_proba(X)
-        loss = -np.inner(y, np.log(p)) - np.inner((1 - p), np.log(1 - p))
+        loss = -np.inner(y, np.log(p)) - np.inner((1 - y), np.log(1 - p))
         # XXX: do we need a safer/faster log here? profile
         if not only_data_loss:
             loss += self.l2 * self.w[:-1].dot(self.w[:-1])
@@ -71,7 +71,7 @@ class SparseLogRegModel(Model):
 
     @property
     def w(self):
-        return self.scale * self.w
+        return self.scale * self.x
 
     def predict_proba(self, X):
         self.p = scipy.special.expit(self.scale * X.dot(self.x))
@@ -79,7 +79,7 @@ class SparseLogRegModel(Model):
 
     def loss(self, X, y, only_data_loss=False):
         p = self.predict_proba(X)
-        loss = -np.inner(y, np.log(p)) - np.inner((1 - p), np.log(1 - p))
+        loss = -np.inner(y, np.log(p)) - np.inner((1 - y), np.log(1 - p))
         # XXX: do we need a safer/faster log here? profile
         if not only_data_loss:
             loss += self.l2 * self.w[:-1].dot(self.w[:-1])
