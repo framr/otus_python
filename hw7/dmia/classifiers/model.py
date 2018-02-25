@@ -18,12 +18,14 @@ class LogRegModel(Model):
     in data for efficient computation.
     """
 
-    def __init__(self, dim, l2=0.0):
+    def __init__(self, dim, lr=1e-3, l2=0.0):
         self.dim = dim
-        self.l2 = 0.0
+        self.l2 = l2
         self.w = None  # weight vector. last weight = bias
         self.p = None  # predictions
         self.g = None  # data gradient
+        self.lr = lr
+        self.lr_coeff = 1.0
 
     def init(self):
         if self.w is None:
@@ -61,6 +63,7 @@ class SparseLogRegModel(Model):
         self.g = None  # data gradient
         self.sparse_w = sparse_w
         self.sparse_g = sparse_g
+        self.lr = 1.0
 
     def init(self):
         if self.x is None:

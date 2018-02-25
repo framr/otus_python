@@ -1,10 +1,9 @@
 import numpy as np
-import scipy
 from scipy import sparse
 
-from .data import SimpleDataIter, Dataset
-from .opt import *
-from .model import *
+from data_iter import SimpleDataIter, Dataset
+from opt import *
+from model import *
 
 
 class LogisticRegression(object):
@@ -12,26 +11,26 @@ class LogisticRegression(object):
         self.loss_history = None
         self.opt = None
         self.model = None
-        self.calc_loss_every_n_batches = 1
+        self.calc_full_loss_every_n_batches = 1
 
-    def _train(self, data_iter, num_iters=100, verbose=False):
+    def _train(self, diter, num_iters=100, verbose=False):
         self.loss_history = []
         cnt = 0
         for it in xrange(num_iters):
-            data_iter.reset()
-            for batch in data_iter:
+            diter.reset()
+            for batch in diter:
                 cnt += 1
                 if verbose and cnt % self.calc_full_loss_every_n_batches == 0:
                     # loss calculation is not sparse due to regularization
-                    print 'iteration %d, instance %d / %d: loss %f' % (it / num_iters, cnt, loss)
                     loss, _ = self.loss(batch.X, batch.y)
+                    print 'iteration %d from %d, instance %d: loss %f' % (it, num_iters, cnt, loss)
                     self.loss_history.append(loss)
                 else:
                     loss, _ = self.loss(batch.X, batch.y, only_data_loss=True)
                 self.opt.step(batch.X, batch.y, self.model)
 
     def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100,
-              batch_size=200, optimizer=None, model=None, verbose=False, calc_loss_every_n_batches=1):
+              batch_size=200, optimizer=None, model=None, verbose=False, calc_full_loss_every_n_batches=1):
         """
         Train this classifier using stochastic gradient descent.
 
@@ -50,18 +49,19 @@ class LogisticRegression(object):
         """
         # Add a column of ones to X for the bias sake.
         X = LogisticRegression.append_biases(X)
-        self.calc_loss_every_n_batches = calc_loss_every_n_batches
+        self.calc_full_loss_every_n_batches = calc_full_loss_every_n_batches
 
         if optimizer is None:
-            self.opt = SGDOptimizer(lr=learning_rate)
+            self.opt = SGDOptimizer()
         if model is None:
-            self.model = LogRegModel(l2=reg)
+            self.model = LogRegModel(X.shape[1], lr=learning_rate, l2=reg)
+            self.model.init()
 
         diter = SimpleDataIter(batch_size=batch_size, dataset=Dataset(X, y))
         self._train(diter, num_iters=num_iters, verbose=verbose)
         return self
 
-    def train2(self, data_iter, learning_rate=1e-3, reg=1e-5, num_iters=100,
+    def train2(self, diter, learning_rate=1e-3, reg=1e-5, num_iters=100,
                batch_size=200, verbose=False):
         """
         Memory-friendly version of train
