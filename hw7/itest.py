@@ -3,7 +3,8 @@ import pandas as pd
 import random
 
 from dmia.classifiers import LogisticRegression
-from dmia.classifiers.model import LogRegModel, SparseLogRegModel
+from dmia.classifiers.model import *
+from dmia.classifiers.opt import *
 from dmia.classifiers.data_iter import Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -34,8 +35,17 @@ if __name__ == "__main__":
     valid = Dataset(X_test, y_test)
 
     params = {
+        "verbose": True,
+        "calc_full_loss_every_n_batches": 10,
         "batch_size": 50,
         "num_iters": 1,
         "reg": 1e-6,
         "learning_rate": 1.0
     }
+
+    opt_params = {
+        "lr_decay": "t_power",
+        "lr_decay_params": {"a": 0.0}
+    }
+    optimizer = SGDOptimizer(opt_params)
+

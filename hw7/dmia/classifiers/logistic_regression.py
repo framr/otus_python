@@ -51,11 +51,11 @@ class LogisticRegression(object):
         X = LogisticRegression.append_biases(X)
         self.calc_full_loss_every_n_batches = calc_full_loss_every_n_batches
 
-        if optimizer is None:
-            self.opt = SGDOptimizer()
         if model is None:
             self.model = LogRegModel(X.shape[1], lr=learning_rate, l2=reg)
             self.model.init()
+            self.opt = SGDOptimizer()
+            self.opt.init(model)
 
         diter = SimpleDataIter(batch_size=batch_size, dataset=Dataset(X, y))
         self._train(diter, num_iters=num_iters, verbose=verbose)

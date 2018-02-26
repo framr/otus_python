@@ -2,7 +2,7 @@ import scipy
 from scipy.sparse import csr_matrix
 import numpy as np
 
-__all__ = "LogRegModel SparseLogRegModel".split()
+__all__ = ["LogRegModel", "SparseLogRegModel", "FTRLLogRegModel", "SVRGLogRegModel"]
 
 
 class Model(object):
@@ -24,12 +24,15 @@ class LogRegModel(Model):
         self.w = None  # weight vector. last weight = bias
         self.p = None  # predictions
         self.g = None  # data gradient
+        self.g_sum = None
+        self.g2_sum = None
         self.lr = lr
         self.lr_coeff = 1.0
 
     def init(self):
         if self.w is None:
             self.w = np.random.randn(self.dim) * 0.01
+
 
     def predict_proba(self, X):
         self.p = scipy.special.expit(X.dot(self.w))
