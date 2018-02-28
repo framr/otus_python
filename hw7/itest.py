@@ -34,18 +34,38 @@ if __name__ == "__main__":
     train = Dataset(X_train, y_train)
     valid = Dataset(X_test, y_test)
 
-    params = {
-        "verbose": True,
-        "calc_full_loss_every_n_batches": 10,
-        "batch_size": 50,
-        "num_iters": 1,
-        "reg": 1e-6,
-        "learning_rate": 1.0
-    }
-
     opt_params = {
         "lr_decay": "t_power",
-        "lr_decay_params": {"a": 0.0}
+        "lr_decay_params": {"a": 1.0, "t_power": 0.5}
     }
-    optimizer = SGDOptimizer(opt_params)
+    optimizer = SGDOptimizer(**opt_params)
+    params = {
+        "optimizer": optimizer,
+        "verbose": True,
+        "calc_full_loss_every_n_batches": 100,
+        "batch_size": 50,
+        "num_iters": 1,
+        "reg": 1e-5,
+        "learning_rate": 10.0
+    }
+    train_lr(train, valid, params)
+
+
+    opt_params = {
+        "lr_decay": "adagrad",
+        "lr_decay_params": {"a": 1.0}
+    }
+    optimizer = SGDOptimizer(**opt_params)
+    params = {
+        "optimizer": optimizer,
+        "verbose": True,
+        "calc_full_loss_every_n_batches": 100,
+        "batch_size": 50,
+        "num_iters": 1,
+        "reg": 1e-5,
+        "learning_rate": 10.0
+    }
+    train_lr(train, valid, params)
+
+
 

@@ -17,25 +17,27 @@ class LogRegModel(Model):
     However, such controlled abstraction leak gives us possibility to fully utilize sparsity
     in data for efficient computation.
     """
+    NAME = "logreg"
 
-    def __init__(self, dim, lr=1e-3, l2=0.0):
+    def __init__(self, dim, **kwargs):
         self.dim = dim
-        self.l2 = l2
+        self.data_shape = kwargs.get("data_shape", (None, None))
+        self.l2 = kwargs.get("l2", 0.0)
+        self.l1 = kwargs.get("l1", 0.0)
+        self.lr = kwargs.get("lr", 1e-3)
         self.w = None  # weight vector. last weight = bias
         self.p = None  # predictions
         self.g = None  # data gradient
-        self.g_sum = None
-        self.g2_sum = None
-        self.lr = lr
         self.lr_coeff = 1.0
 
     def init(self):
         if self.w is None:
-            self.w = np.random.randn(self.dim) * 0.01
+            # model.w = np.random.randn(self.dim) * 0.01
+            self.w = np.zeros(self.dim)
 
-
-    def predict_proba(self, X):
-        self.p = scipy.special.expit(X.dot(self.w))
+    def predict_proba(self, X, w=None):
+        weights = w or self.w
+        self.p = scipy.special.expit(X.dot(weights))
         return self.p
 
     def loss(self, X, y, only_data_loss=False):
@@ -44,7 +46,7 @@ class LogRegModel(Model):
         # XXX: do we need a safer/faster log here? profile
         if not only_data_loss:
             loss += self.l2 * self.w[:-1].dot(self.w[:-1])
-        self.g = (p - y) * X  # average data gradient
+        self.g = (p - y) * X  # average data gradient, but numpy makes it a dense vector
         num_train = X.shape[0]
         self.g /= num_train
         loss /= num_train
@@ -57,6 +59,8 @@ class SparseLogRegModel(Model):
     scale-free parameter vector. This is a common trick to have sparse parameter updates
     in sgd with quadratic regularization.
     """
+    NAME = "sparse_logreg"
+
     def __init__(self, dim, l2=0.0, sparse_w=False, sparse_g=False):
         self.dim = dim
         self.l2 = 0.0
@@ -89,7 +93,7 @@ class SparseLogRegModel(Model):
         # XXX: do we need a safer/faster log here? profile
         if not only_data_loss:
             loss += self.l2 * self.w[:-1].dot(self.w[:-1])
-        self.g = (p - y) * X  # average data gradient
+        self.g = (p - y) * X  # average data gradient, sparse in reality, but numpy makes it a dense vector
         if self.sparse_g:
             self.g = csr_matrix(self.g)
 
@@ -99,11 +103,67 @@ class SparseLogRegModel(Model):
         return loss, self.g
 
 
-class FTRLLogRegModel(Model):
-    def __init__(self):
-        self.w = None
-        self.z = None
+class FTRLLogRegModel(LogRegModel):
+    NAME = "ftrl_logreg"
+
+    def __init__(self, dim, **kwargs):
+        super(LogRegModel, self).__init__(dim, **kwargs)
+        self.alpha = kwargs.get("alpha", 1.0)
+        self.beta = kwargs.get("beta", 1.0)
+
+    def init(self):
+        self.n = np.zeros(self.dim)
+        self.z = np.zeros(self.dim)
+        self.w = np.zeros(self.dim)
+
+    def update_w(self):
+        c = (self.beta + np.sqrt(self.n)) / self.aplha + self.l2
+        # all ops below are not sparse (we ignore the data sparsity)
+        zero = np.abs(self.z) < self.l1
+        nonzero = ~zero
+        self.w[zero] = 0
+        self.w[nonzero] = -(self.z[nonzero] - self.l1 * np.sign(self.z[nonzero])) / c
+
+    def loss(self, X, y, only_data_loss=False):
+        self.update_w()
+        loss, g = super(LogRegModel, self).loss(X, y, only_data_loss=only_data_loss)
+        return loss, g
 
 
-class SVRGLogRegModel(Model):
-    pass
+class SVRGLogRegModel(LogRegModel):
+    NAME = "svrg_logreg"
+
+    def __init__(self, dim, **kwargs):
+        super(LogRegModel, self).__init__(dim, **kwargs)
+
+    def init(self):
+        self.g_sum = np.zeros(self.dim)
+        self.g0 = np.zeros(self.dim)
+        self.w0 = np.zeros(self.dim)
+        self.w = np.zeros(self.dim)
+
+    def update_w(self):
+        c = (self.beta + np.sqrt(self.n)) / self.aplha + self.l2
+        # all ops below are not sparse (we ignore the data sparsity)
+        zero = np.abs(self.z) < self.l1
+        nonzero = ~zero
+        self.w[zero] = 0
+        self.w[nonzero] = -(self.z[nonzero] - self.l1 * np.sign(self.z[nonzero])) / c
+
+    def loss(self, X, y, only_data_loss=False):
+        p = self.predict_proba(X)
+        loss = -np.inner(y, np.log(p)) - np.inner((1 - y), np.log(1 - p))
+        # XXX: do we need a safer/faster log here? profile
+        if not only_data_loss:
+            loss += self.l2 * self.w[:-1].dot(self.w[:-1])
+
+        # average data gradient, but numpy makes it a dense vector
+        self.g = (p - y) * X
+        num_train = X.shape[0]
+        self.g /= num_train
+        loss /= num_train
+        # calculate gradient using stored weights from previous iteration
+        p0 = self.predict_proba(X, w=self.w0)
+        self.g0 = (p0 - y) * X
+        self.g0 /= num_train
+        return loss, self.g

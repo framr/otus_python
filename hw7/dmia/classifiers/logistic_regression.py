@@ -17,6 +17,7 @@ class LogisticRegression(object):
         self.loss_history = []
         cnt = 0
         for it in xrange(num_iters):
+            self.opt.on_iter_begin(it, diter, self.model)
             diter.reset()
             for batch in diter:
                 cnt += 1
@@ -27,7 +28,8 @@ class LogisticRegression(object):
                     self.loss_history.append(loss)
                 else:
                     loss, _ = self.loss(batch.X, batch.y, only_data_loss=True)
-                self.opt.step(batch.X, batch.y, self.model)
+                self.opt.step(self.model)
+            self.opt.on_iter_end(it, diter, self.model)
 
     def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100,
               batch_size=200, optimizer=None, model=None, verbose=False, calc_full_loss_every_n_batches=1):
@@ -51,11 +53,15 @@ class LogisticRegression(object):
         X = LogisticRegression.append_biases(X)
         self.calc_full_loss_every_n_batches = calc_full_loss_every_n_batches
 
-        if model is None:
-            self.model = LogRegModel(X.shape[1], lr=learning_rate, l2=reg)
-            self.model.init()
+
+        if optimizer is None:
             self.opt = SGDOptimizer()
-            self.opt.init(model)
+        else:
+            self.opt = optimizer
+        if model is None:
+            self.model = LogRegModel(X.shape[1], lr=learning_rate, l2=reg, data_shape=X.shape)
+            self.model.init()
+            self.opt.init_model(model)
 
         diter = SimpleDataIter(batch_size=batch_size, dataset=Dataset(X, y))
         self._train(diter, num_iters=num_iters, verbose=verbose)

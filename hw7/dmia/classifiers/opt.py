@@ -1,47 +1,8 @@
-from math import pow
 import numpy as np
 
-__all__ = ["FTRLOptimizer", "SGDOptimizer", "SparseSGDOptimizer", "TPowerLRDecay", "Adagrad"]
+from lrdecay import LR_DECAY_MAPPING
 
-
-
-class LRDecay(object):
-    def init(self, model):
-        pass
-
-    def step(self, model):
-        raise NotImplementedError
-
-
-class TPowerLRDecay(LRDecay):
-    def __init__(self, t_power=0.5, a=0.0):
-        self.t_power = t_power
-        self.a = a
-        self.t = 1  # time counter
-
-    def step(self, model):
-        model.lr_coeff = 1.0 / (self.a + pow(self.t, self.t_power))
-        self.t += 1
-
-
-class Adagrad(LRDecay):
-    def __init__(self, a=0.5):
-        self.a = a
-        self.t = 1.0
-
-    def init(self, model):
-        model.g2_sum = np.random.randn(self.dim) * 0.01
-
-    def step(self, model):
-        # XXX: check that it correctly works with sparse gradients
-        model.lr_coeff = 1.0 / (self.a + np.sqrt(model.g2_sum))
-        model.g2_sum += model.g * model.g
-
-
-LR_DECAY_MAPPING = {
-    "t_power": TPowerLRDecay,
-    "adagrad": Adagrad
-}
+__all__ = ["FTRLOptimizer", "SGDOptimizer", "SparseSGDOptimizer"]
 
 
 class Optimizer(object):
@@ -50,18 +11,24 @@ class Optimizer(object):
         self.lr_decay_params = lr_decay_params or {}
         self.lr_decay = None
 
-    def init(self, model):
+    def init_model(self, model):
         if self.lr_decay:
             self.lr_decay = LR_DECAY_MAPPING[self.lr_decay_type](self.lr_decay_params)
             self.lr_decay.init(model)
 
-    def step(self):
+    def step(self, model):
         raise NotImplementedError
+
+    def on_iter_end(self, it, diter, model):
+        pass
+
+    def on_iter_begin(self, it, diter, model):
+        pass
 
 
 class SGDOptimizer(Optimizer):
-    def step(self, X, y, model):
-        l2 = model.l2 / X.shape[0]
+    def step(self, model):
+        l2 = model.l2 / model.data_shape[0]
         lr = model.lr * model.lr_coeff
         full_g = model.g
         full_g[:-1] += 2 * l2 * model.w[:-1]
@@ -71,8 +38,8 @@ class SGDOptimizer(Optimizer):
             self.lr_decay.step(model)
 
 class SparseSGDOptimizer(Optimizer):
-    def step(self, X, y, model):
-        l2 = model.l2 / X.shape[0]
+    def step(self, model):
+        l2 = model.l2 / model.data_shape[0]
         lr = model.lr * model.lr_coeff
         new_scale = model.scale * (1 - 2 * lr * l2)
         lr_eff = (lr / model.scale) / (1 - 2 * lr * l2)
@@ -85,18 +52,53 @@ class SparseSGDOptimizer(Optimizer):
 
 
 class FTRLOptimizer(Optimizer):
-    def init(self, model):
-        pass
+    """
+    Can be used only together with LogRegModel (not SparseLogRegModel)
+    https://static.googleusercontent.com/media/research.google.com/ru//pubs/archive/41159.pdf
+    """
 
-    def step(self):
-        pass
+    def __init__(self, alpha=1.0, beta=1.0):
+        self.alpha = alpha
+        self.beta = beta
+
+    def init_model(self, model):
+        if model.NAME not in ("ftrl_logreg"):
+            raise ValueError("ftrl optimizer should be used in conjunction with FTRL model")
+
+    def step(self, model):
+        s = (np.sqrt(model.n + model.g * model.g) - np.sqrt(model.n)) / model.alpha
+        model.z += model.g - s * model.w
+        model.n += model.g * model.g
 
 
 class SVRGOptimizer(Optimizer):
-    def init(self, model):
+    """
+    https://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf
+    """
+    def init_model(self, model):
         pass
 
-    def step(self):
+    def step(self, model):
+        l2 = model.l2 / model.data_shape[0]
+        lr = model.lr * model.lr_coeff
+        g = model.g
+        g[:-1] += 2 * l2 * model.w[:-1]
+        model.w -= lr * (g - model.g0 + model.g_sum)
+        if self.lr_decay:
+            self.lr_decay.step(model)
+
+    def on_iter_begin(self, it, diter, model):
         pass
 
+    def on_iter_end(self, it, diter, model):
+        diter.reset()
+        model.g_sum = np.zeros(model.dim)
+        loss_sum = 0
+        model.w0[:] = model.w[:]
+        for batch in diter:
+            loss, g = model.loss(batch.X, batch.y)
+            model.g_sum += g * batch.X.shape[0]
+            loss_sum += loss * batch.X.shape[0]
+
+        model.g_sum /= model.data_shape[0]
 
