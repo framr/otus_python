@@ -142,14 +142,6 @@ class SVRGLogRegModel(LogRegModel):
         self.w0 = np.zeros(self.dim)
         self.w = np.zeros(self.dim)
 
-    def update_w(self):
-        c = (self.beta + np.sqrt(self.n)) / self.aplha + self.l2
-        # all ops below are not sparse (we ignore the data sparsity)
-        zero = np.abs(self.z) < self.l1
-        nonzero = ~zero
-        self.w[zero] = 0
-        self.w[nonzero] = -(self.z[nonzero] - self.l1 * np.sign(self.z[nonzero])) / c
-
     def loss(self, X, y, only_data_loss=False):
         p = self.predict_proba(X)
         loss = -np.inner(y, np.log(p)) - np.inner((1 - y), np.log(1 - p))
