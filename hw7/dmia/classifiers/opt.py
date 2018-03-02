@@ -53,10 +53,8 @@ class SparseSGDOptimizer(Optimizer):
 
 class FTRLOptimizer(Optimizer):
     """
-    Can be used only together with LogRegModel (not SparseLogRegModel)
     https://static.googleusercontent.com/media/research.google.com/ru//pubs/archive/41159.pdf
     """
-
     def __init__(self, alpha=1.0, beta=1.0, lr_decay=None, lr_decay_params=None):
         super(FTRLOptimizer, self).__init__(lr_decay=lr_decay, lr_decay_params=lr_decay_params)
         self.alpha = alpha
@@ -76,8 +74,10 @@ class SVRGOptimizer(Optimizer):
     """
     https://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf
     """
-    #def init_model(self, model):
-    #    pass
+    def init_model(self, model):
+        super(SVRGOptimizer, self).__init__(model)
+        if model.NAME not in ("svrg_logreg"):
+            raise ValueError("svrg optimizer should be used in conjunction with svrg model")
 
     def step(self, model):
         l2 = model.l2 / model.data_shape[0]
@@ -85,8 +85,6 @@ class SVRGOptimizer(Optimizer):
         g = model.g
         g[:-1] += 2 * l2 * model.w[:-1]
         model.w -= lr * (g - model.g0 + model.g_sum)
-        #model.w -= lr * g
-
         if self.lr_decay:
             self.lr_decay.step(model)
 

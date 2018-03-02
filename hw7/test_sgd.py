@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-
+from sklearn import
 
 @pytest.fixture(scope="module")
 def dataset():
@@ -128,7 +128,6 @@ def Xtest_svrg_adagrad(dataset):
     model = SVRGLogRegModel(dim, data_shape=(train.X.shape[0], dim),
                 l2=params["reg"], lr=params["learning_rate"])
     params["model"] = model
-
     print "SVRG with Adgrad lr decay, params = %s %s" % (params, opt_params)
     train_lr(train, valid, params)
 

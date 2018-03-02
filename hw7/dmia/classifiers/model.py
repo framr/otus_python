@@ -6,16 +6,20 @@ __all__ = ["LogRegModel", "SparseLogRegModel", "FTRLLogRegModel", "SVRGLogRegMod
 
 
 class Model(object):
-    pass
+    def __init__(self, dim, **kwargs):
+        raise NotImplementedError
+    def init(self):
+        raise NotImplementedError
+    def predict_proba(self, X, w=None):
+        raise NotImplementedError
+    def loss(self, X, y, only_data_loss=False):
+        raise  NotImplementedError
 
 
 class LogRegModel(Model):
     """
     Container for model parameters - both explicit and latent, required for
-    optimization algorithm. We are mixing here internals of model and optimization
-    algorithm in single class, things which are normally thought of as independent entities.
-    However, such controlled abstraction leak gives us possibility to fully utilize sparsity
-    in data for efficient computation.
+    optimization algorithm.
     """
     NAME = "logreg"
 
@@ -61,16 +65,18 @@ class SparseLogRegModel(Model):
     """
     NAME = "sparse_logreg"
 
-    def __init__(self, dim, l2=0.0, sparse_w=False, sparse_g=False):
+    def __init__(self, dim, **kwargs):
         self.dim = dim
-        self.l2 = 0.0
+        self.l2 = kwargs.get("l2", 0.0)
+        self.l1 = kwargs.get("l1", 0.0)
+        self.lr = kwargs.get("lr", 1e-3)
+        self.sparse_g = kwargs.get("sparse_g")
+        self.sparse_w = kwargs.get("sparse_w")
         self.scale = 1.0
         self.x = None
         self.p = None  # predictions
         self.g = None  # data gradient
-        self.sparse_w = sparse_w
-        self.sparse_g = sparse_g
-        self.lr = 1.0
+        self.lr_coeff = 1.0
 
     def init(self):
         if self.x is None:
@@ -104,6 +110,9 @@ class SparseLogRegModel(Model):
 
 
 class FTRLLogRegModel(LogRegModel):
+    """
+    https://static.googleusercontent.com/media/research.google.com/ru//pubs/archive/41159.pdf
+    """
     NAME = "ftrl_logreg"
 
     def __init__(self, dim, **kwargs):
@@ -132,6 +141,9 @@ class FTRLLogRegModel(LogRegModel):
 
 
 class SVRGLogRegModel(LogRegModel):
+    """
+    https://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf
+    """
     NAME = "svrg_logreg"
 
     def __init__(self, dim, **kwargs):
