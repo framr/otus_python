@@ -2,7 +2,7 @@ import numpy as np
 
 from lrdecay import LR_DECAY_MAPPING
 
-__all__ = ["FTRLOptimizer", "SGDOptimizer", "SparseSGDOptimizer"]
+__all__ = ["SVRGOptimizer", "FTRLOptimizer", "SGDOptimizer", "SparseSGDOptimizer"]
 
 
 class Optimizer(object):
@@ -57,7 +57,8 @@ class FTRLOptimizer(Optimizer):
     https://static.googleusercontent.com/media/research.google.com/ru//pubs/archive/41159.pdf
     """
 
-    def __init__(self, alpha=1.0, beta=1.0):
+    def __init__(self, alpha=1.0, beta=1.0, lr_decay=None, lr_decay_params=None):
+        super(FTRLOptimizer, self).__init__(lr_decay=lr_decay, lr_decay_params=lr_decay_params)
         self.alpha = alpha
         self.beta = beta
 
@@ -75,8 +76,8 @@ class SVRGOptimizer(Optimizer):
     """
     https://papers.nips.cc/paper/4937-accelerating-stochastic-gradient-descent-using-predictive-variance-reduction.pdf
     """
-    def init_model(self, model):
-        pass
+    #def init_model(self, model):
+    #    pass
 
     def step(self, model):
         l2 = model.l2 / model.data_shape[0]
@@ -84,21 +85,21 @@ class SVRGOptimizer(Optimizer):
         g = model.g
         g[:-1] += 2 * l2 * model.w[:-1]
         model.w -= lr * (g - model.g0 + model.g_sum)
+        #model.w -= lr * g
+
         if self.lr_decay:
             self.lr_decay.step(model)
 
     def on_iter_begin(self, it, diter, model):
-        pass
-
-    def on_iter_end(self, it, diter, model):
         diter.reset()
         model.g_sum = np.zeros(model.dim)
         loss_sum = 0
         model.w0[:] = model.w[:]
         for batch in diter:
-            loss, g = model.loss(batch.X, batch.y)
+            loss, g = model.loss(batch.X, batch.y, svrg=False)
             model.g_sum += g * batch.X.shape[0]
             loss_sum += loss * batch.X.shape[0]
-
         model.g_sum /= model.data_shape[0]
 
+    def on_iter_end(self, it, diter, model):
+        pass

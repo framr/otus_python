@@ -36,7 +36,7 @@ class LogRegModel(Model):
             self.w = np.zeros(self.dim)
 
     def predict_proba(self, X, w=None):
-        weights = w or self.w
+        weights = self.w if w is None else w
         self.p = scipy.special.expit(X.dot(weights))
         return self.p
 
@@ -107,7 +107,7 @@ class FTRLLogRegModel(LogRegModel):
     NAME = "ftrl_logreg"
 
     def __init__(self, dim, **kwargs):
-        super(LogRegModel, self).__init__(dim, **kwargs)
+        super(FTRLLogRegModel, self).__init__(dim, **kwargs)
         self.alpha = kwargs.get("alpha", 1.0)
         self.beta = kwargs.get("beta", 1.0)
 
@@ -117,16 +117,17 @@ class FTRLLogRegModel(LogRegModel):
         self.w = np.zeros(self.dim)
 
     def update_w(self):
-        c = (self.beta + np.sqrt(self.n)) / self.aplha + self.l2
+        c = (self.beta + np.sqrt(self.n)) / self.alpha + self.l2
         # all ops below are not sparse (we ignore the data sparsity)
         zero = np.abs(self.z) < self.l1
         nonzero = ~zero
         self.w[zero] = 0
-        self.w[nonzero] = -(self.z[nonzero] - self.l1 * np.sign(self.z[nonzero])) / c
+        self.w[nonzero] = -(self.z[nonzero] - self.l1 * np.sign(self.z[nonzero])) / c[nonzero]
+
 
     def loss(self, X, y, only_data_loss=False):
         self.update_w()
-        loss, g = super(LogRegModel, self).loss(X, y, only_data_loss=only_data_loss)
+        loss, g = super(FTRLLogRegModel, self).loss(X, y, only_data_loss=only_data_loss)
         return loss, g
 
 
@@ -134,7 +135,7 @@ class SVRGLogRegModel(LogRegModel):
     NAME = "svrg_logreg"
 
     def __init__(self, dim, **kwargs):
-        super(LogRegModel, self).__init__(dim, **kwargs)
+        super(SVRGLogRegModel, self).__init__(dim, **kwargs)
 
     def init(self):
         self.g_sum = np.zeros(self.dim)
@@ -142,7 +143,7 @@ class SVRGLogRegModel(LogRegModel):
         self.w0 = np.zeros(self.dim)
         self.w = np.zeros(self.dim)
 
-    def loss(self, X, y, only_data_loss=False):
+    def loss(self, X, y, only_data_loss=False, svrg=True):
         p = self.predict_proba(X)
         loss = -np.inner(y, np.log(p)) - np.inner((1 - y), np.log(1 - p))
         # XXX: do we need a safer/faster log here? profile
@@ -155,7 +156,9 @@ class SVRGLogRegModel(LogRegModel):
         self.g /= num_train
         loss /= num_train
         # calculate gradient using stored weights from previous iteration
-        p0 = self.predict_proba(X, w=self.w0)
-        self.g0 = (p0 - y) * X
-        self.g0 /= num_train
+        if svrg:
+            p0 = self.predict_proba(X, w=self.w0)
+            self.g0 = (p0 - y) * X
+            self.g0 /= num_train
+
         return loss, self.g

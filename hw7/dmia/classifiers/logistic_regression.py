@@ -31,7 +31,7 @@ class LogisticRegression(object):
                 self.opt.step(self.model)
             self.opt.on_iter_end(it, diter, self.model)
 
-    def train(self, X, y, learning_rate=1e-3, reg=1e-5, num_iters=100,
+    def train(self, X, y, learning_rate=1e-3, reg=1e-5, l1=0.0, num_iters=100,
               batch_size=200, optimizer=None, model=None, verbose=False, calc_full_loss_every_n_batches=1):
         """
         Train this classifier using stochastic gradient descent.
@@ -60,8 +60,10 @@ class LogisticRegression(object):
             self.opt = optimizer
         if model is None:
             self.model = LogRegModel(X.shape[1], lr=learning_rate, l2=reg, data_shape=X.shape)
-            self.model.init()
-            self.opt.init_model(model)
+        else:
+            self.model = model
+        self.model.init()
+        self.opt.init_model(model)
 
         diter = SimpleDataIter(batch_size=batch_size, dataset=Dataset(X, y))
         self._train(diter, num_iters=num_iters, verbose=verbose)
