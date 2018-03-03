@@ -16,7 +16,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn import
+#from sklearn import
+
 
 @pytest.fixture(scope="module")
 def dataset():
@@ -108,7 +109,7 @@ def Xtest_ftrl_adagrad(dataset):
     train_lr(train, valid, params)
 
 
-def Xtest_svrg_adagrad(dataset):
+def test_svrg_adagrad(dataset):
     opt_params = {
         "lr_decay": "adagrad",
         "lr_decay_params": {"a": 1.0}

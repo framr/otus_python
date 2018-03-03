@@ -13,7 +13,7 @@ class LogisticRegression(object):
         self.model = None
         self.calc_full_loss_every_n_batches = 1
 
-    def _train(self, diter, num_iters=100, verbose=False):
+    def _train(self, diter, num_iters=100, num_steps=None, verbose=False):
         self.loss_history = []
         cnt = 0
         for it in xrange(num_iters):
@@ -29,11 +29,14 @@ class LogisticRegression(object):
                 else:
                     loss, _ = self.loss(batch.X, batch.y, only_data_loss=True)
                 self.opt.step(self.model)
+
+                if num_steps and cnt >= num_steps:
+                    break
             self.opt.on_iter_end(it, diter, self.model)
 
-    def train(self, X, y, learning_rate=1e-3, reg=1e-5, l1=0.0, num_iters=100,
+    def train(self, X, y, learning_rate=1e-3, reg=1e-5, l1=0.0, num_iters=1,
               batch_size=200, optimizer=None, model=None, model_cls=None,
-              verbose=False, calc_full_loss_every_n_batches=1):
+              verbose=False, calc_full_loss_every_n_batches=1, num_steps=None):
         """
         Train this classifier using stochastic gradient descent.
 
@@ -54,21 +57,22 @@ class LogisticRegression(object):
         X = LogisticRegression.append_biases(X)
         self.calc_full_loss_every_n_batches = calc_full_loss_every_n_batches
 
-        if optimizer is None:
-            self.opt = SGDOptimizer()
-        else:
-            self.opt = optimizer
-        if model_cls:
-            self.model = model_cls(X.shape[1], lr=learning_rate, l2=reg, l1=l1, data_shape=X.shape)
-        elif model:
-            self.model = model
-        else:
-            self.model = LogRegModel(X.shape[1], lr=learning_rate, l2=reg, data_shape=X.shape)
-        self.model.init()
-        self.opt.init_model(self.model)
+        if not self.model:
+            if optimizer is None:
+                self.opt = SGDOptimizer()
+            else:
+                self.opt = optimizer
+            if model_cls:
+                self.model = model_cls(X.shape[1], lr=learning_rate, l2=reg, l1=l1, data_shape=X.shape)
+            elif model:
+                self.model = model
+            else:
+                self.model = LogRegModel(X.shape[1], lr=learning_rate, l2=reg, data_shape=X.shape)
+            self.model.init()
+            self.opt.init_model(self.model)
 
         diter = SimpleDataIter(batch_size=batch_size, dataset=Dataset(X, y))
-        self._train(diter, num_iters=num_iters, verbose=verbose)
+        self._train(diter, num_iters=num_iters, verbose=verbose, num_steps=None)
         return self
 
     def train2(self, diter, learning_rate=1e-3, reg=1e-5, num_iters=100,
